@@ -8,6 +8,11 @@ outputs/figures/*
 outputs/tables/*
 outputs/reports/*
 logs/*
-!.gitkeep
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!outputs/figures/.gitkeep
+!outputs/tables/.gitkeep
+!outputs/reports/.gitkeep
+!logs/.gitkeep
 
 my.txt

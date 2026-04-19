@@ -4,3 +4,4 @@ python-dotenv
 matplotlib
 scikit-learn
 jupyter
+streamlit

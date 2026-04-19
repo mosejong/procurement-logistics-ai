@@ -1,10 +1,7 @@
-import pandas as pd
+"""
+Deprecated compatibility wrapper.
 
+새 프로젝트 구조에서는 `src.preprocess.clean_bid_data`를 사용합니다.
+"""
 
-def clean_bid_data(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-
-    # 필요하면 여기서 컬럼명 확인 후 수정
-    df.columns = [col.strip() for col in df.columns]
-
-    return df
+from src.preprocess.clean_bid_data import *  # noqa: F401,F403
