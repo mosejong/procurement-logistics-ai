@@ -200,12 +200,12 @@ if page == "🔍 사업 유형 검색":
 
                         if cat_data.empty:
                             st.warning(
-                                f"**'{cat}' 조달 공고가 현재 수집 데이터에서 0건**입니다.\n\n"
+                                f"**'{cat}' 조달 공고가 현재 수집 데이터(7개 구·2년)에서 0건**입니다.\n\n"
                                 "가능한 이유:\n"
                                 "- 자치구 단위에서는 소액 수의계약으로 처리 (공개 입찰 미등록)\n"
                                 "- 조달청 직접구매(MAS) 방식 활용\n"
-                                "- 수집 기간(180일) 내 해당 자치구에서 공고 없음\n\n"
-                                "→ 수집 기간을 늘리거나 전국 단위로 확장하면 나타날 수 있습니다."
+                                "- 현재 수집 중인 7개 구에서 해당 품목 공고가 없음\n\n"
+                                "→ 수집 대상을 25개 구 전체로 확장하면 나타날 수 있습니다."
                             )
                         else:
                             st.caption(
@@ -498,7 +498,8 @@ elif page == "🗺️ 지역 분석":
 
             for row in top3.itertuples():
                 cache_key = f"{selected}__{row.item_category}"
-                with st.expander(f"**{row.item_category}** — {row.opportunity_score:.1f}점 · {int(row.bid_count)}건"):
+                # district를 레이블에 포함 → 구 변경 시 Streamlit이 새 위젯으로 인식해 잔상 방지
+                with st.expander(f"**{row.item_category}** [{selected}] — {row.opportunity_score:.1f}점 · {int(row.bid_count)}건"):
                     if cache_key not in st.session_state["gemini_cache"]:
                         with st.spinner("해석 생성 중..."):
                             fit_score = None
@@ -856,25 +857,25 @@ elif page == "🏪 경쟁 분석":
             ].copy()
 
             # inds_group 이름이 품목군과 매핑이 다르므로 직접 매핑
+            # item_category_detail → competition inds_group 매핑
             cat_stores_map = {
-                "급식/식품": "음식/카페",
-                "위생/방역": "생활서비스",
-                "교육/교구": "교육",
-                "의료/복지": "의료/복지",
-                "IT/소프트웨어": "기타",
-                "시설관리/공사": "기타",
-                "도서/콘텐츠": "소매",
-                "행사/홍보": "기타",
-                "사무용품/문구": "소매",
-                "가구/인테리어": "소매",
-                "차량/운송": "기타",
-                "창업/경영지원": "기타",
-                "환경개선/생활민원": "생활서비스",
-                "시설위탁/운영": "생활서비스",
-                "도시정비/재개발": "기타",
-                "건설/감리": "기타",
-                "회계/전문용역": "기타",
-                "기타": "기타",
+                "급식/식자재":      "음식/카페",
+                "방역/소독":        "생활서비스",
+                "청소/환경미화":    "생활서비스",
+                "교육물품/교구":    "교육",
+                "의료/복지용품":    "의료/복지",
+                "IT장비/전산":      "기타",
+                "시설유지보수":     "기타",
+                "인쇄/홍보물":      "소매",
+                "사무용품/소모품":  "소매",
+                "차량/운송":        "기타",
+                "행사/운영용역":    "생활서비스",
+                "전문용역/컨설팅":  "기타",
+                "경비/보안":        "생활서비스",
+                "급수/전기/설비":   "기타",
+                "조경/녹지관리":    "생활서비스",
+                "보험/금융":        "기타",
+                "기타/미분류":      "기타",
             }
             mapped_inds = cat_stores_map.get(sel_cat, "기타")
             cat_comp = competition[competition["inds_group"] == mapped_inds][
