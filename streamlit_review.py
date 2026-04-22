@@ -485,6 +485,45 @@ elif page == "🗺️ 지역 분석":
                     delta=f"공고 {int(row.bid_count)}건",
                 )
 
+        # AI 공공수요 해석 (Gemini)
+        st.subheader("🤖 AI 공공수요 해석")
+        st.caption("조달청 입찰공고 데이터 기반 설명입니다. 창업 성공을 예측하지 않으며 공공수요 참고 지표로만 활용하세요.")
+
+        if not top3.empty:
+            from src.recommendation.gemini_client import build_demand_summary, DemandContext
+
+            # 세션 캐시 키: (district, item_category) 조합
+            if "gemini_cache" not in st.session_state:
+                st.session_state["gemini_cache"] = {}
+
+            for row in top3.itertuples():
+                cache_key = f"{selected}__{row.item_category}"
+                with st.expander(f"**{row.item_category}** — {row.opportunity_score:.1f}점 · {int(row.bid_count)}건"):
+                    if cache_key not in st.session_state["gemini_cache"]:
+                        with st.spinner("해석 생성 중..."):
+                            fit_score = None
+                            if not consumer_fit.empty:
+                                fit_row = consumer_fit[
+                                    (consumer_fit["district"] == selected) &
+                                    (consumer_fit["item_category"] == row.item_category)
+                                ]
+                                if not fit_row.empty:
+                                    fit_score = float(fit_row.iloc[0]["consumer_fit_score"])
+
+                            ctx = DemandContext(
+                                district=selected,
+                                item_category=row.item_category,
+                                bid_count=int(row.bid_count),
+                                amount_sum=float(row.amount_sum),
+                                opportunity_score=float(row.opportunity_score),
+                                recommendation_flag=getattr(row, "recommendation_flag", "추천"),
+                                consumer_fit_score=fit_score,
+                                stores_per_10k=None,
+                            )
+                            st.session_state["gemini_cache"][cache_key] = build_demand_summary(ctx)
+
+                    st.markdown(st.session_state["gemini_cache"][cache_key])
+
         # 점수 구성 요소 상세
         with st.expander("📊 품목군별 점수 구성 상세 보기"):
             st.caption("공고수·금액·최근성 각 요소 점수를 품목군 단위로 비교합니다.")
