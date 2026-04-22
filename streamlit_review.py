@@ -435,12 +435,28 @@ elif page == "🗺️ 지역 분석":
             show_cols = [c for c in [
                 "item_category", "bid_count", "amount_sum",
                 "opportunity_score", "consumer_fit_score",
+                "recommendation_flag",
                 "bids_per_10k_population", "avg_lead_time_days",
             ] if c in result.columns]
             display = result[show_cols].copy()
             if "amount_sum" in display.columns:
                 display["amount_sum"] = display["amount_sum"].apply(format_won)
-            st.dataframe(display, use_container_width=True, hide_index=True)
+
+            # 추천 제외·데이터부족 행 색상 강조
+            def _flag_style(row):
+                flag = row.get("recommendation_flag", "추천")
+                if flag == "제외":
+                    return ["background-color: #ffeaea"] * len(row)
+                if flag == "데이터부족":
+                    return ["background-color: #fff8e1"] * len(row)
+                return [""] * len(row)
+
+            if "recommendation_flag" in display.columns:
+                st.dataframe(display.style.apply(_flag_style, axis=1),
+                             use_container_width=True, hide_index=True)
+                st.caption("🔴 제외: 허가·면허 필요 업종  🟡 데이터부족: 공고 10건 미만")
+            else:
+                st.dataframe(display, use_container_width=True, hide_index=True)
 
         with col2:
             st.subheader("해석 기준")
@@ -458,7 +474,8 @@ elif page == "🗺️ 지역 분석":
             show_score_formula()
 
         st.subheader("TOP 3 품목군 요약")
-        top3 = result.head(3)
+        rec_result = result[result.get("recommendation_flag", pd.Series("추천", index=result.index)) == "추천"] if "recommendation_flag" in result.columns else result
+        top3 = rec_result.head(3)
         cols = st.columns(3)
         for i, (col, row) in enumerate(zip(cols, top3.itertuples())):
             with col:

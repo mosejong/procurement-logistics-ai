@@ -1,9 +1,16 @@
 import pandas as pd
 
 from src.preprocess.clean_bid_data import clean_bid_data
+from src.preprocess.classify_agency import apply_classifications
 
 # 1차 샘플링 대상입니다. 전국이 아니라 서울 안에서도 성격이 뚜렷한 구만 먼저 봅니다.
 TARGET_DISTRICTS = ["관악구", "강남구", "마포구", "영등포구", "성동구", "종로구", "송파구"]
+
+# 추천에서 제외할 카테고리 (진입장벽 높거나 일반 창업 불가)
+EXCLUDE_CATEGORIES: set[str] = {"폐기물/환경", "건설/공사", "기타/미분류"}
+
+# 데이터 부족 경고 카테고리 (10건 미만 기준으로 런타임에 결정)
+MIN_BID_COUNT_FOR_RECOMMENDATION = 10
 
 # 발표에서 각 구를 설명할 때 쓰는 사람이 읽는 라벨입니다.
 DISTRICT_PROFILES = {
@@ -45,8 +52,9 @@ def build_opportunity_matrix(df: pd.DataFrame, target_districts: list[str] | Non
     """
     조달 입찰공고를 '자치구 x 품목군' 단위로 집계합니다.
 
-    이 표가 현재 프로젝트의 핵심 중간 결과물입니다.
-    지역을 고정하면 추천 품목을 볼 수 있고, 품목을 고정하면 추천 지역을 볼 수 있습니다.
+    item_category_detail(신 분류기) 기준으로 groupby.
+    입력 df에 item_category_detail이 없으면 apply_classifications()로 자동 생성.
+    출력 컬럼명은 item_category로 유지해 downstream 코드와 호환.
     """
     cleaned = clean_bid_data(df)
     districts = target_districts or TARGET_DISTRICTS
@@ -57,9 +65,13 @@ def build_opportunity_matrix(df: pd.DataFrame, target_districts: list[str] | Non
             columns=[
                 "district", "district_profile", "item_category", "bid_count", "amount_sum",
                 "amount_mean", "latest_posted_date", "count_score", "amount_score",
-                "recency_score", "opportunity_score",
+                "recency_score", "opportunity_score", "recommendation_flag",
             ]
         )
+
+    # item_category_detail이 없으면 신 분류기 적용
+    if "item_category_detail" not in filtered.columns:
+        filtered = apply_classifications(filtered)
 
     # 낙찰 소요일 = 개찰일 - 공고일 (재고회전 지표 대리변수)
     if "opengDt" in filtered.columns and "bidNtceDt" in filtered.columns:
@@ -78,10 +90,12 @@ def build_opportunity_matrix(df: pd.DataFrame, target_districts: list[str] | Non
     if has_lead:
         agg_dict["avg_lead_time_days"] = ("lead_time_days", "mean")
 
+    # 신 분류기(item_category_detail) 기준으로 집계
     matrix = (
-        filtered.groupby(["district", "item_category"], dropna=False)
+        filtered.groupby(["district", "item_category_detail"], dropna=False)
         .agg(**agg_dict)
         .reset_index()
+        .rename(columns={"item_category_detail": "item_category"})
     )
     if has_lead:
         matrix["avg_lead_time_days"] = matrix["avg_lead_time_days"].round(1)
@@ -90,16 +104,24 @@ def build_opportunity_matrix(df: pd.DataFrame, target_districts: list[str] | Non
     matrix["amount_score"] = min_max_score(matrix["amount_sum"])
     matrix["recency_score"] = recency_score(matrix["latest_posted_date"])
 
-    # 초기 점수입니다. 지금은 사람이 검토할 샘플이 목적이라 단순하고 설명 가능한 산식을 씁니다.
     matrix["opportunity_score"] = (
         (matrix["count_score"] * 0.5 + matrix["amount_score"] * 0.3 + matrix["recency_score"] * 0.2)
         * 100
     ).round(2)
 
+    # 추천 정책 플래그
+    matrix["recommendation_flag"] = "추천"
+    matrix.loc[matrix["item_category"].isin(EXCLUDE_CATEGORIES), "recommendation_flag"] = "제외"
+    matrix.loc[
+        (matrix["bid_count"] < MIN_BID_COUNT_FOR_RECOMMENDATION) &
+        (matrix["recommendation_flag"] == "추천"),
+        "recommendation_flag"
+    ] = "데이터부족"
+
     columns = [
         "district", "district_profile", "item_category", "bid_count", "amount_sum",
         "amount_mean", "latest_posted_date", "count_score", "amount_score",
-        "recency_score", "opportunity_score",
+        "recency_score", "opportunity_score", "recommendation_flag",
     ]
     if "avg_lead_time_days" in matrix.columns:
         columns.append("avg_lead_time_days")

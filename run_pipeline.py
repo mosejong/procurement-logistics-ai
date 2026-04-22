@@ -153,7 +153,11 @@ def step_features() -> bool:
         from src.features.build_features import build_feature_table
         from src.utils.file_handler import save_csv
 
-        cleaned = pd.read_csv(ROOT / "data" / "processed" / "seoul_bid_cleaned.csv", encoding="utf-8-sig")
+        # classified(item_category_detail 포함)를 읽어 신 분류기 기준으로 matrix 생성
+        classified_path = ROOT / "data" / "processed" / "seoul_bid_classified.csv"
+        src_path = classified_path if classified_path.exists() else ROOT / "data" / "processed" / "seoul_bid_cleaned.csv"
+        cleaned = pd.read_csv(src_path, encoding="utf-8-sig")
+        log.info("matrix 입력: %s", src_path.name)
 
         matrix = build_opportunity_matrix(cleaned, TARGET_DISTRICTS)
         save_csv(matrix, "outputs/tables/seoul_opportunity_matrix.csv")
