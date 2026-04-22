@@ -492,16 +492,36 @@ elif page == "🗺️ 지역 분석":
         if not top3.empty:
             from src.recommendation.gemini_client import build_demand_summary, DemandContext
 
-            # 세션 캐시 키: (district, item_category) 조합
+            # 지역 전환 감지 → 이전 지역 캐시 삭제 (잔상 방지)
+            if st.session_state.get("ai_district") != selected:
+                prev = st.session_state.get("ai_district", "")
+                if prev:
+                    st.session_state["gemini_cache"] = {
+                        k: v for k, v in st.session_state.get("gemini_cache", {}).items()
+                        if not k.startswith(f"{prev}__")
+                    }
+                st.session_state["ai_district"] = selected
+
             if "gemini_cache" not in st.session_state:
                 st.session_state["gemini_cache"] = {}
 
-            for row in top3.itertuples():
-                cache_key = f"{selected}__{row.item_category}"
-                # district를 레이블에 포함 → 구 변경 시 Streamlit이 새 위젯으로 인식해 잔상 방지
-                with st.expander(f"**{row.item_category}** [{selected}] — {row.opportunity_score:.1f}점 · {int(row.bid_count)}건"):
+            for i, row in enumerate(top3.itertuples()):
+                flag = getattr(row, "recommendation_flag", "추천")
+                cache_key = f"{selected}__{row.item_category}__{flag}"
+
+                header_col, toggle_col = st.columns([5, 1])
+                with header_col:
+                    st.markdown(f"**{i+1}위 {row.item_category}** &nbsp; {row.opportunity_score:.1f}점 · {int(row.bid_count)}건")
+                with toggle_col:
+                    show_ai = st.toggle(
+                        "AI 해석",
+                        key=f"ai_toggle_{selected}_{i}",
+                        value=False,
+                    )
+
+                if show_ai:
                     if cache_key not in st.session_state["gemini_cache"]:
-                        with st.spinner("해석 생성 중..."):
+                        with st.spinner(f"{row.item_category} 해석 생성 중..."):
                             fit_score = None
                             if not consumer_fit.empty:
                                 fit_row = consumer_fit[
@@ -517,13 +537,16 @@ elif page == "🗺️ 지역 분석":
                                 bid_count=int(row.bid_count),
                                 amount_sum=float(row.amount_sum),
                                 opportunity_score=float(row.opportunity_score),
-                                recommendation_flag=getattr(row, "recommendation_flag", "추천"),
+                                recommendation_flag=flag,
                                 consumer_fit_score=fit_score,
                                 stores_per_10k=None,
                             )
                             st.session_state["gemini_cache"][cache_key] = build_demand_summary(ctx)
 
                     st.markdown(st.session_state["gemini_cache"][cache_key])
+
+                if i < len(top3) - 1:
+                    st.divider()
 
         # 점수 구성 요소 상세
         with st.expander("📊 품목군별 점수 구성 상세 보기"):
