@@ -1,37 +1,35 @@
-from datetime import datetime
+from pathlib import Path
 
-from src.api.population_api import get_population_households
-from src.config.settings import DATA_PROCESSED_DIR, DATA_RAW_DIR
-from src.preprocess.clean_population import clean_population_data
+import pandas as pd
+
+from src.config.settings import DATA_PROCESSED_DIR
 from src.utils.file_handler import save_csv
 
+REFERENCE_PATH = Path("data/reference/seoul_district_population.csv")
 
-def default_stat_month() -> str:
-    """전월 기준 YYYYMM을 기본 조회월로 사용합니다."""
-    today = datetime.now()
-    year = today.year
-    month = today.month - 1
-    if month == 0:
-        year -= 1
-        month = 12
-    return f"{year}{month:02d}"
+
+def load_population_reference() -> pd.DataFrame:
+    """
+    행안부 주민등록인구통계 레퍼런스 데이터를 로드합니다.
+
+    인구 데이터는 연 단위로 변동하므로 레퍼런스 CSV를 기준으로 사용합니다.
+    API 연결이 확보되면 get_population_households() 결과로 교체할 수 있습니다.
+    """
+    if not REFERENCE_PATH.exists():
+        raise FileNotFoundError(f"레퍼런스 파일이 없습니다: {REFERENCE_PATH}")
+
+    df = pd.read_csv(REFERENCE_PATH, encoding="utf-8-sig")
+    return df[["district", "total_population", "total_households"]].rename(
+        columns={"district": "district_name"}
+    )
 
 
 def main() -> None:
-    stat_month = default_stat_month()
-    raw = get_population_households(stat_month=stat_month, verbose=True)
-
-    if raw.empty:
-        print("인구/세대현황 데이터가 비어 있습니다. API 키, endpoint, 조회월을 확인하세요.")
-        return
-
-    raw_path = save_csv(raw, f"{DATA_RAW_DIR}/seoul_population_raw.csv")
-    cleaned = clean_population_data(raw)
-    cleaned_path = save_csv(cleaned, f"{DATA_PROCESSED_DIR}/seoul_population_cleaned.csv")
-
-    print(f"인구 원천 데이터 저장: {raw_path}")
-    print(f"인구 정제 데이터 저장: {cleaned_path}")
-    print(cleaned.head())
+    population = load_population_reference()
+    cleaned_path = save_csv(population, f"{DATA_PROCESSED_DIR}/seoul_population_cleaned.csv")
+    print(f"인구 데이터 저장: {cleaned_path}")
+    print(f"자치구 수: {len(population)}")
+    print(population.to_string(index=False))
 
 
 if __name__ == "__main__":

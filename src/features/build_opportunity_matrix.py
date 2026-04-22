@@ -61,16 +61,30 @@ def build_opportunity_matrix(df: pd.DataFrame, target_districts: list[str] | Non
             ]
         )
 
+    # 낙찰 소요일 = 개찰일 - 공고일 (재고회전 지표 대리변수)
+    if "opengDt" in filtered.columns and "bidNtceDt" in filtered.columns:
+        filtered["opengDt"] = pd.to_datetime(filtered["opengDt"], errors="coerce")
+        filtered["bidNtceDt"] = pd.to_datetime(filtered["bidNtceDt"], errors="coerce")
+        filtered["lead_time_days"] = (filtered["opengDt"] - filtered["bidNtceDt"]).dt.days
+
+    has_lead = "lead_time_days" in filtered.columns
+
+    agg_dict = {
+        "bid_count": ("bid_title", "size"),
+        "amount_sum": ("estimated_amount", "sum"),
+        "amount_mean": ("estimated_amount", "mean"),
+        "latest_posted_date": ("posted_date", "max"),
+    }
+    if has_lead:
+        agg_dict["avg_lead_time_days"] = ("lead_time_days", "mean")
+
     matrix = (
         filtered.groupby(["district", "item_category"], dropna=False)
-        .agg(
-            bid_count=("bid_title", "size"),
-            amount_sum=("estimated_amount", "sum"),
-            amount_mean=("estimated_amount", "mean"),
-            latest_posted_date=("posted_date", "max"),
-        )
+        .agg(**agg_dict)
         .reset_index()
     )
+    if has_lead:
+        matrix["avg_lead_time_days"] = matrix["avg_lead_time_days"].round(1)
     matrix["district_profile"] = matrix["district"].map(DISTRICT_PROFILES).fillna("서울 주요 자치구")
     matrix["count_score"] = min_max_score(matrix["bid_count"])
     matrix["amount_score"] = min_max_score(matrix["amount_sum"])
@@ -87,6 +101,8 @@ def build_opportunity_matrix(df: pd.DataFrame, target_districts: list[str] | Non
         "amount_mean", "latest_posted_date", "count_score", "amount_score",
         "recency_score", "opportunity_score",
     ]
+    if "avg_lead_time_days" in matrix.columns:
+        columns.append("avg_lead_time_days")
     return matrix[columns].sort_values("opportunity_score", ascending=False).reset_index(drop=True)
 
 

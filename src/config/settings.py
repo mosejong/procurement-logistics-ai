@@ -5,11 +5,18 @@ load_dotenv()
 
 PROCUREMENT_API_KEY = os.getenv("PROCUREMENT_API_KEY", "")
 POPULATION_API_KEY = os.getenv("POPULATION_API_KEY", PROCUREMENT_API_KEY)
+POPULATION_AGE_API_KEY = os.getenv("POPULATION_AGE_API_KEY", PROCUREMENT_API_KEY)
+STORE_API_KEY = os.getenv("STORE_API_KEY", PROCUREMENT_API_KEY)
+AWARD_API_KEY = os.getenv("AWARD_API_KEY", PROCUREMENT_API_KEY)
+
 BASE_URL_BID = "https://apis.data.go.kr/1230000/ad/BidPublicInfoService"
 BASE_URL_POPULATION = os.getenv(
     "BASE_URL_POPULATION",
     "https://apis.data.go.kr/1741000/stdgPpltnHhStus/selectStdgPpltnHhStus",
 )
+BASE_URL_POPULATION_AGE = "https://apis.data.go.kr/1741000/주민등록인구기타현황/행정동별5세연령및성별주민등록인구"
+BASE_URL_STORE = "https://apis.data.go.kr/B553077/api/open/sdsc2"
+BASE_URL_AWARD = "https://apis.data.go.kr/1230000/ad/BidPublicInfoService"
 
 DATA_RAW_DIR = "data/raw"
 DATA_PROCESSED_DIR = "data/processed"

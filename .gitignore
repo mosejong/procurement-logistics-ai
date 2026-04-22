@@ -16,3 +16,6 @@ logs/*
 !logs/.gitkeep
 
 my.txt
+*.hwpx
+
+/old/*
