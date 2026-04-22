@@ -13,7 +13,7 @@ from src.utils.file_handler import ensure_dir, save_csv
 from src.visualization.plot_heatmap import plot_opportunity_heatmap
 
 
-def _date_windows(days_back: int = 180, window_days: int = 30) -> list[tuple[str, str]]:
+def _date_windows(days_back: int = 730, window_days: int = 30) -> list[tuple[str, str]]:
     """API 조회 범위 초과를 피하려고 전체 기간을 30일 단위로 쪼갭니다."""
     end = datetime.now()
     start = end - timedelta(days=days_back)

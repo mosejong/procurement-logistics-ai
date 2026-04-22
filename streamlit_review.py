@@ -2,6 +2,9 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent))
 
+import os
+import signal
+
 import pandas as pd
 import streamlit as st
 
@@ -104,6 +107,11 @@ page = st.sidebar.radio(
     "화면 선택",
     ["📋 프로젝트 개요", "🔍 사업 유형 검색", "🗺️ 지역 분석", "📦 품목 분석", "⚖️ 자치구 비교", "👥 소비층 적합도", "🏪 경쟁 분석", "📊 원천 데이터"],
 )
+
+st.sidebar.divider()
+if st.sidebar.button("⏹ 서버 종료", type="secondary", use_container_width=True):
+    st.sidebar.warning("서버를 종료합니다...")
+    os.kill(os.getpid(), signal.SIGTERM)
 
 # ── 공통 헤더 ──────────────────────────────────────────────────────────────
 st.title("공공조달 수요 기반 사업 아이템·입지 분석")
