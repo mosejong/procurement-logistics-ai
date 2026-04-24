@@ -51,7 +51,7 @@
   → 자치구별 공고 수집 (build_seoul_sample.py)
   → 기관명/공고명 분류 (classify_agency.py)
       기관명 → agency_type (8개 유형)
-      공고명 → item_category_detail (18개 세부 유형, 기타/미분류 7.9%)
+      공고명 → item_category_detail (18개 세부 유형, 기타/미분류 6.7%)
   → 자치구 × 품목군 매트릭스 생성 (build_opportunity_matrix.py)
   → opportunity_score 산출 (공고수 50% + 금액 30% + 최근성 20%)
   → 추천 정책 적용 (recommendation_flag: 추천 / 제외 / 데이터부족)
@@ -124,7 +124,7 @@
 ### 2) `item_category_detail` (세부 발주 유형, 18종)
 
 공고명 텍스트 기반 규칙 분류입니다.  
-현재 분류율은 **92.1%**, `기타/미분류` 비율은 **7.9%**입니다.
+현재 분류율은 **93.3%**, `기타/미분류` 비율은 **6.7%**입니다.
 
 청소/환경미화, 방역/소독, 폐기물/환경, 급식/식자재, IT장비/전산,  
 사무용품/소모품, 시설유지보수, 교육물품/교구, 의료/복지용품,  
@@ -155,13 +155,14 @@
 
 | 항목 | 2차 (7개 구) | 3차 (25개 구) | 상태 |
 |---|---|---|---|
-| 기타/미분류 비율 | 4.9% | 7.9% | ✅ 목표(20%) 이하 유지 |
-| opportunity_matrix | 100행 | 337행 | ✅ |
-| feature_table | 100행 | 337행 | ✅ |
-| consumer_fit | — | 133행 | ✅ |
+| 기타/미분류 비율 | 4.9% | 6.7% | ✅ 목표(20%) 이하 유지 |
+| opportunity_matrix | 100행 | 340행 | ✅ |
+| feature_table | 100행 | 340행 | ✅ |
+| consumer_fit | — | 475행 | ✅ |
 
 기타/미분류가 4.9% → 7.9%로 소폭 상승한 것은 분류기 성능 저하가 아니라  
-기존 7개 구에 없던 공고 패턴(신규 구의 발주 유형)이 유입된 결과입니다.
+기존 7개 구에 없던 공고 패턴(신규 구의 발주 유형)이 유입된 결과입니다.  
+이후 키워드 보완(폐비닐·준설토·살수·검진·리모델링·공동탐사 등 13개 추가)으로 6.7%까지 낮췄습니다.
 
 자세한 검수 내용은 `check.md` 참고.
 
@@ -248,7 +249,7 @@ outputs/tables/seoul_consumer_fit.csv         소비층 적합도 점수
 outputs/tables/seoul_competition_matrix.csv   업종별 경쟁 포화도
 outputs/figures/seoul_opportunity_heatmap.png 자치구 × 품목군 히트맵
 notebooks/01_eda_seoul_bid.ipynb              탐색적 데이터 분석
-check.md                                      분류·추천 검수 기록 (2차)
+check.md                                      분류·추천 검수 기록 (3차)
 ```
 
 ---
