@@ -1,11 +1,25 @@
 """
-전체 파이프라인 단일 실행 스크립트
+전체 데이터 파이프라인 단일 실행 스크립트
+
+역할:
+    수집부터 소비층 점수 산출까지 전 단계를 순서대로 실행합니다.
+    각 단계가 완료되면 체크포인트 파일에 현재 단계를 기록해,
+    중간에 실패하더라도 해당 단계부터 재실행할 수 있습니다.
+
+파이프라인 단계:
+    1. collect      - 조달청 API에서 자치구별 입찰공고 수집 → data/raw/
+    2. classify     - 기관명/공고명 분류 (agency_type, item_category_detail) → data/processed/
+    3. features     - opportunity_matrix, feature_table 생성 → outputs/tables/
+    4. competition  - 소상공인 점포 기반 경쟁 포화도 산출 → outputs/tables/
+    5. consumer_fit - 행안부 연령 인구 기반 소비층 적합도 산출 → outputs/tables/
 
 실행:
-    python run_pipeline.py              # 전체 실행
-    python run_pipeline.py --from-step classify   # classify 단계부터 재시작
+    python run_pipeline.py                        # 전체 실행 (또는 체크포인트 이어서)
+    python run_pipeline.py --from-step classify   # classify 단계부터 강제 재시작
     python run_pipeline.py --from-step features
     python run_pipeline.py --from-step competition
+    python run_pipeline.py --from-step consumer_fit
+    python run_pipeline.py --force-recollect      # 기존 raw 파일 삭제 후 재수집
 
 체크포인트 파일: logs/pipeline_checkpoint.txt
 로그 파일:      logs/pipeline_YYYYMMDD_HHMMSS.log
@@ -65,7 +79,7 @@ def write_checkpoint(step: str) -> None:
 
 def step_collect() -> bool:
     log.info("=" * 60)
-    log.info("STEP 1/5  수집  (2년치 서울 7개 구)")
+    log.info("STEP 1/5  수집  (2년치 서울 25개 구)")
     log.info("=" * 60)
 
     # 이미 raw 데이터가 있으면 건너뜀

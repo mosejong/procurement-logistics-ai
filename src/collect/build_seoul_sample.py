@@ -1,3 +1,21 @@
+"""
+서울 자치구별 조달청 입찰공고 수집
+
+역할:
+    조달청 나라장터 API(get_bid_list)를 호출해 서울 전 자치구의 입찰공고를 수집합니다.
+    API 조회 범위 제한(30일)을 피하기 위해 전체 기간을 30일 단위 윈도우로 쪼개서 호출합니다.
+
+주요 함수:
+    _date_windows()             - 수집 기간을 30일 단위로 분할
+    _collect_bids_for_district()- 특정 자치구 공고 수집 (dminsttNm 파라미터 활용)
+    _collect_all_districts()    - 전체 자치구 순서대로 수집 후 단일 DataFrame 반환
+    main()                      - 수집 → 정제 → 분류 → 매트릭스 → 리포트 전체 실행
+
+수집 방식:
+    dminsttNm(수요기관명) 파라미터로 API 레벨에서 구 기관만 필터링합니다.
+    수집된 행에는 _source_district 컬럼을 붙여 이후 전처리에서 신뢰할 수 있는 지역 정보로 씁니다.
+"""
+
 from datetime import datetime, timedelta
 from pathlib import Path
 

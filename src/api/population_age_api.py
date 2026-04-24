@@ -46,7 +46,7 @@ def _fetch_dong(admm_cd: str, ym: str) -> list[dict]:
         logger.warning("XML 파싱 오류: %s", admm_cd)
         return []
 
-    header = root.find(".//header")
+    header = root.find(".//header") or root.find(".//head")
     if header is None:
         return []
     rc = header.find("resultCode")

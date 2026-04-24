@@ -1,6 +1,20 @@
+"""
+조달청 입찰공고 원천 데이터 정제
+
+역할:
+    API에서 받은 원천 DataFrame을 분석에 쓸 수 있는 형태로 정제합니다.
+    - 컬럼명 표준화 (bid_title, estimated_amount, posted_date, district 등)
+    - 금액 숫자 변환 및 결측 처리
+    - 기관명·공고명 텍스트에서 자치구 추출 (district 컬럼 생성)
+    - _source_district(수집 시 태깅된 구 정보)를 우선 사용하고 텍스트 추출로 보완
+
+주의:
+    district 컬럼이 비어 있는 행은 downstream(build_opportunity_matrix 등)에서 필터링됩니다.
+"""
+
 import pandas as pd
 
-# 서울 자치구 이름을 원천 공고 텍스트에서 찾기 위한 목록입니다.
+# 기관명·공고명 텍스트에서 자치구를 추출하기 위한 서울 25개 구 목록
 SEOUL_DISTRICTS = [
     "강남구", "강동구", "강북구", "강서구", "관악구", "광진구", "구로구", "금천구",
     "노원구", "도봉구", "동대문구", "동작구", "마포구", "서대문구", "서초구",
