@@ -200,12 +200,11 @@ if page == "🔍 사업 유형 검색":
 
                         if cat_data.empty:
                             st.warning(
-                                f"**'{cat}' 조달 공고가 현재 수집 데이터(7개 구·2년)에서 0건**입니다.\n\n"
+                                f"**'{cat}' 조달 공고가 현재 수집 데이터(서울 25개 구·3,323건)에서 0건**입니다.\n\n"
                                 "가능한 이유:\n"
                                 "- 자치구 단위에서는 소액 수의계약으로 처리 (공개 입찰 미등록)\n"
                                 "- 조달청 직접구매(MAS) 방식 활용\n"
-                                "- 현재 수집 중인 7개 구에서 해당 품목 공고가 없음\n\n"
-                                "→ 수집 대상을 25개 구 전체로 확장하면 나타날 수 있습니다."
+                                "- 해당 품목군이 입찰 공고보다 수의계약으로 주로 처리됨"
                             )
                         else:
                             st.caption(
@@ -239,7 +238,7 @@ if page == "🔍 사업 유형 검색":
 
                     # 기관 유형 분석 (classified 데이터 활용)
                     if not classified.empty:
-                        cat_classified = classified[classified["item_category"].isin(categories)]
+                        cat_classified = classified[classified["item_category_detail"].isin(categories)]
                         if not cat_classified.empty:
                             st.markdown("---")
                             st.markdown("#### 🏛️ 어떤 기관이 주로 구매하나요?")
@@ -403,9 +402,9 @@ elif page == "📋 프로젝트 개요":
     st.header("현재 한계")
     st.warning(
         """
-- 서울 6개 자치구 샘플 분석 (관악구는 해당 API에서 공고 수 미확보)
+- 서울 25개 자치구 분석 (3,323건 입찰공고 기준)
 - 공공수요만 반영 (민간 소비수요, 상권 데이터 미결합)
-- 품목군 분류는 키워드 기반으로 일부 기타 발생 가능
+- 품목군 분류는 키워드 기반으로 일부 기타 발생 가능 (현재 6.7%)
 - opportunity_score는 창업 성공 예측값이 아닙니다
         """
     )
@@ -633,7 +632,7 @@ elif page == "📦 품목 분석":
 
         # 기관 유형 분포
         if not classified.empty:
-            item_classified = classified[classified["item_category"] == selected_item]
+            item_classified = classified[classified["item_category_detail"] == selected_item]
             if not item_classified.empty:
                 st.markdown("---")
                 st.subheader("🏛️ 주로 어떤 기관이 발주하나요?")
@@ -750,7 +749,7 @@ elif page == "👥 소비층 적합도":
 **{sel_dist}** 자치구의 연령 인구 구성 기반 점수입니다.
 
 - **타겟 연령 비중**: 해당 품목군의 주소비층 연령대가 전체 인구에서 차지하는 비율
-- **소비층 적합도**: 7개 구 중 상대 비교 (0~1, 높을수록 해당 구에 소비층 집중)
+- **소비층 적합도**: 서울 25개 구 중 상대 비교 (0~1, 높을수록 해당 구에 소비층 집중)
 
 > 예: **의료/복지**는 60대+ 비중이 높은 구에서 점수가 높음
 > 예: **교육/교구**는 0~20대 비중이 높은 구에서 점수가 높음
