@@ -8,7 +8,7 @@
 
 > 2026 공공조달데이터·AI 활용 창업경진대회 출품작 (주최: 조달청)
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://procurement-logistics-ai.streamlit.app)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://procurement-logistics-ai-5qian47widxpcuqefpjipy.streamlit.app)
 
 ---
 
