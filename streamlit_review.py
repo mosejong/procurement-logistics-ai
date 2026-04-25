@@ -441,19 +441,14 @@ elif page == "🗺️ 지역 분석":
             if "amount_sum" in display.columns:
                 display["amount_sum"] = display["amount_sum"].apply(format_won)
 
-            # 추천 제외·데이터부족 행 색상 강조
-            def _flag_style(row):
-                flag = row.get("recommendation_flag", "추천")
-                if flag == "제외":
-                    return ["background-color: #ffeaea"] * len(row)
-                if flag == "데이터부족":
-                    return ["background-color: #fff8e1"] * len(row)
-                return [""] * len(row)
-
             if "recommendation_flag" in display.columns:
-                st.dataframe(display.style.apply(_flag_style, axis=1),
-                             use_container_width=True, hide_index=True)
-                st.caption("🔴 제외: 허가·면허 필요 업종  🟡 데이터부족: 공고 10건 미만")
+                display["recommendation_flag"] = display["recommendation_flag"].map({
+                    "추천": "✅ 추천",
+                    "제외": "🚫 제외",
+                    "데이터부족": "⚠️ 데이터부족",
+                }).fillna(display["recommendation_flag"])
+                st.dataframe(display, use_container_width=True, hide_index=True)
+                st.caption("✅ 추천  🚫 제외: 허가·면허 필요 업종  ⚠️ 데이터부족: 공고 10건 미만")
             else:
                 st.dataframe(display, use_container_width=True, hide_index=True)
 
