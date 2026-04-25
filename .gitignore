@@ -6,15 +6,18 @@ __pycache__/
 data/raw/*
 data/processed/*
 outputs/figures/*
-outputs/tables/*
 outputs/reports/*
 logs/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !outputs/figures/.gitkeep
-!outputs/tables/.gitkeep
 !outputs/reports/.gitkeep
 !logs/.gitkeep
+
+# 배포용 데이터는 추적 (outputs/tables/*.csv, data/processed/seoul_bid_classified.csv)
+!outputs/tables/*.csv
+!data/processed/seoul_bid_classified.csv
+!data/processed/seoul_bid_cleaned.csv
 
 my.txt
 *.hwpx
