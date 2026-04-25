@@ -18,5 +18,6 @@ logs/*
 
 my.txt
 *.hwpx
+*.bak
 
 /old/*
