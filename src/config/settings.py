@@ -26,6 +26,7 @@ STORE_API_KEY = _get_secret("STORE_API_KEY") or PUBLIC_DATA_API_KEY
 AWARD_API_KEY = _get_secret("AWARD_API_KEY") or PUBLIC_DATA_API_KEY
 
 GEMINI_API_KEY = _get_secret("GEMINI_API_KEY")
+KOSIS_API_KEY = _get_secret("KOSIS_API_KEY")
 
 BASE_URL_BID = "https://apis.data.go.kr/1230000/ad/BidPublicInfoService"
 BASE_URL_POPULATION = os.getenv(

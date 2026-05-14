@@ -14,13 +14,10 @@
 
 import pandas as pd
 
-# 기관명·공고명 텍스트에서 자치구를 추출하기 위한 서울 25개 구 목록
-SEOUL_DISTRICTS = [
-    "강남구", "강동구", "강북구", "강서구", "관악구", "광진구", "구로구", "금천구",
-    "노원구", "도봉구", "동대문구", "동작구", "마포구", "서대문구", "서초구",
-    "성동구", "성북구", "송파구", "양천구", "영등포구", "용산구", "은평구",
-    "종로구", "중구", "중랑구",
-]
+from src.config.regions import ALL_DISTRICT_NAMES, DISTRICT_CITY_MAP, REGIONS
+
+# 전국 구/시/군 목록 (regions.py에서 가져옴)
+ALL_DISTRICTS: list[str] = sorted(ALL_DISTRICT_NAMES, key=len, reverse=True)
 
 # 서울 외 지역까지 기본 지역명으로 추출할 때 쓰는 목록입니다.
 REGION_KEYWORDS = [
@@ -104,12 +101,17 @@ def _extract_region(row: pd.Series) -> str:
 
 
 def _extract_district(row: pd.Series) -> str:
-    """행 전체 텍스트에서 서울 자치구명을 찾습니다."""
+    """행 전체 텍스트에서 전국 구/시/군명을 찾습니다. 긴 이름 우선 매칭."""
     text = _row_text(row)
-    for district in SEOUL_DISTRICTS:
+    for district in ALL_DISTRICTS:
         if district in text:
             return district
     return "미상"
+
+
+def _extract_city_from_district(district: str) -> str:
+    """구/시/군명으로 소속 시/도를 반환합니다."""
+    return DISTRICT_CITY_MAP.get(district, "미상")
 
 
 def _to_amount(series: pd.Series) -> pd.Series:
@@ -171,15 +173,23 @@ def clean_bid_data(df: pd.DataFrame) -> pd.DataFrame:
         missing_region = df["region"].isna() | (df["region"].astype(str).str.strip() == "")
         df.loc[missing_region, "region"] = df.loc[missing_region].apply(_extract_region, axis=1)
 
-    # 서울 자치구가 잡히면 region은 서울로 보정합니다.
+    # 전국 구/시/군명을 텍스트에서 추출합니다.
     df["district"] = df.apply(_extract_district, axis=1)
-    df.loc[df["district"] != "미상", "region"] = "서울"
 
-    # 수집 단계에서 dminsttNm으로 태깅된 자치구는 텍스트 추출보다 신뢰도가 높으므로 덮어씁니다.
+    # 수집 단계에서 _source_district로 태깅된 값은 텍스트 추출보다 신뢰도가 높으므로 덮어씁니다.
     if "_source_district" in df.columns:
         tagged = df["_source_district"].notna() & (df["_source_district"].astype(str).str.strip() != "")
         df.loc[tagged, "district"] = df.loc[tagged, "_source_district"]
-        df.loc[tagged, "region"] = "서울"
+
+    # district가 확정된 행에서 city(시/도)를 설정합니다.
+    # _source_city로 태깅된 경우 우선 사용합니다.
+    df["city"] = df["district"].apply(_extract_city_from_district)
+    if "_source_city" in df.columns:
+        tagged_city = df["_source_city"].notna() & (df["_source_city"].astype(str).str.strip() != "")
+        df.loc[tagged_city, "city"] = df.loc[tagged_city, "_source_city"]
+
+    # region 컬럼을 city 기반으로 보정합니다.
+    df.loc[df["city"] != "미상", "region"] = df.loc[df["city"] != "미상", "city"]
 
     if "posted_date" in df.columns:
         df["posted_date"] = pd.to_datetime(df["posted_date"], errors="coerce")

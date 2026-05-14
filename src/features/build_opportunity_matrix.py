@@ -3,32 +3,37 @@
 
 역할:
     조달청 입찰공고 데이터를 '자치구 × 품목군(item_category_detail)' 단위로 집계하고,
-    공고수·금액·최근성을 결합한 opportunity_score와 추천 정책 플래그를 산출합니다.
+    공고수·금액·최근성·경쟁도를 결합한 opportunity_score와 추천 정책 플래그를 산출합니다.
 
 주요 상수:
-    TARGET_DISTRICTS  - 수집·분석 대상 자치구 목록 (서울 25개 구)
+    TARGET_DISTRICTS  - 수집·분석 대상 자치구 목록
     EXCLUDE_CATEGORIES - 추천에서 제외할 규제/진입장벽 카테고리
     MIN_BID_COUNT_FOR_RECOMMENDATION - 데이터부족 판단 기준 건수
     DISTRICT_PROFILES  - 대시보드·발표용 구별 특성 라벨
 
 opportunity_score 공식:
-    count_score × 0.5 + amount_score × 0.3 + recency_score × 0.2 × 100
-    (공고 수가 가장 직접적인 수요 신호이므로 count에 절반 비중 부여)
+    count_score × 0.40 + amount_score × 0.25 + recency_score × 0.15 + competition_score × 0.20
+    - count_score    : 공고 수 (반복 수요 신호) — 전체 구 min-max 정규화
+    - amount_score   : 총 발주 금액 (구매 규모) — 전체 구 min-max 정규화
+    - recency_score  : 최근성 (1/(1+경과일/30)) — 현재 수요 여부
+    - competition_score : 개방경쟁 비율 (1 - 지명경쟁 비율) — 높을수록 신규진입 용이
 """
 
 import pandas as pd
 
+from src.config.regions import DISTRICT_PROFILES, REGIONS, get_all_city_district_pairs
 from src.preprocess.clean_bid_data import clean_bid_data
 from src.preprocess.classify_agency import apply_classifications
 
-# 수집·분석 대상 자치구 — 서울 25개 전 자치구
-TARGET_DISTRICTS = [
-    "강남구", "강동구", "강북구", "강서구", "관악구",
-    "광진구", "구로구", "금천구", "노원구", "도봉구",
-    "동대문구", "동작구", "마포구", "서대문구", "서초구",
-    "성동구", "성북구", "송파구", "양천구", "영등포구",
-    "용산구", "은평구", "종로구", "중구", "중랑구",
+# 전국 모든 구/시/군 — build_opportunity_matrix의 기본 대상
+TARGET_DISTRICTS: list[str] = [
+    district
+    for districts in REGIONS.values()
+    for district in districts
 ]
+
+# 서울 25개 구 (하위 호환 — 기존 서울 전용 호출 코드에서 참조)
+SEOUL_TARGET_DISTRICTS: list[str] = REGIONS["서울특별시"]
 
 # 추천에서 제외할 카테고리
 # 진입장벽이 높거나 허가·면허가 필요해 일반 예비창업자에게 추천하기 부적절한 업종
@@ -36,36 +41,6 @@ EXCLUDE_CATEGORIES: set[str] = {"폐기물/환경", "건설/공사", "기타/미
 
 # 공고 건수가 이 값 미만이면 데이터부족으로 처리 — 소표본 카테고리의 과신을 방지
 MIN_BID_COUNT_FOR_RECOMMENDATION = 10
-
-# 대시보드·발표용 구별 특성 라벨
-# 수치로 표현하기 어려운 지역 맥락을 한 줄로 요약해 화면에 노출
-DISTRICT_PROFILES = {
-    "강남구": "업무지구/고소득/IT",
-    "강동구": "주거/강변/문화",
-    "강북구": "주거/서민/교육",
-    "강서구": "공항/산업단지/주거",
-    "관악구": "청년/자취생/대학가",
-    "광진구": "대학/강변/상업",
-    "구로구": "산업/디지털/제조",
-    "금천구": "제조/산업단지/중소기업",
-    "노원구": "주거/교육/대학",
-    "도봉구": "주거/자연/교육",
-    "동대문구": "전통시장/패션/대학",
-    "동작구": "대학/주거/공원",
-    "마포구": "홍대/관광/문화콘텐츠",
-    "서대문구": "대학/의료/주거",
-    "서초구": "법조/교육/고소득",
-    "성동구": "성수/브랜드/라이프스타일",
-    "성북구": "대학/문화/주거",
-    "송파구": "가족주거/대형상권/복합문화",
-    "양천구": "교육/주거/신도시",
-    "영등포구": "오피스/금융/교통",
-    "용산구": "외국인/관광/개발",
-    "은평구": "주거/문화/뉴타운",
-    "종로구": "공공기관/전통상권/관광",
-    "중구": "도심/관광/명동",
-    "중랑구": "주거/제조/서민",
-}
 
 
 def min_max_score(series: pd.Series) -> pd.Series:
@@ -125,31 +100,49 @@ def build_opportunity_matrix(df: pd.DataFrame, target_districts: list[str] | Non
 
     has_lead = "lead_time_days" in filtered.columns
 
+    # 경쟁도: 지명경쟁(dsgntCmptYn=Y) 여부 플래그 준비
+    if "dsgntCmptYn" in filtered.columns:
+        filtered["_is_open"] = (filtered["dsgntCmptYn"].str.strip().str.upper() != "Y").astype(int)
+    else:
+        filtered["_is_open"] = 1  # 정보 없으면 개방경쟁으로 간주
+
     agg_dict = {
         "bid_count": ("bid_title", "size"),
         "amount_sum": ("estimated_amount", "sum"),
         "amount_mean": ("estimated_amount", "mean"),
         "latest_posted_date": ("posted_date", "max"),
+        "open_bid_ratio": ("_is_open", "mean"),  # 개방경쟁 비율 (0~1)
     }
     if has_lead:
         agg_dict["avg_lead_time_days"] = ("lead_time_days", "mean")
 
     # 신 분류기(item_category_detail) 기준으로 집계
+    group_cols = ["district", "item_category_detail"]
+    if "city" in filtered.columns:
+        group_cols = ["city", "district", "item_category_detail"]
+
     matrix = (
-        filtered.groupby(["district", "item_category_detail"], dropna=False)
+        filtered.groupby(group_cols, dropna=False)
         .agg(**agg_dict)
         .reset_index()
         .rename(columns={"item_category_detail": "item_category"})
     )
     if has_lead:
         matrix["avg_lead_time_days"] = matrix["avg_lead_time_days"].round(1)
-    matrix["district_profile"] = matrix["district"].map(DISTRICT_PROFILES).fillna("서울 주요 자치구")
+    matrix["district_profile"] = matrix["district"].map(DISTRICT_PROFILES).fillna("전국 주요 지역")
     matrix["count_score"] = min_max_score(matrix["bid_count"])
     matrix["amount_score"] = min_max_score(matrix["amount_sum"])
     matrix["recency_score"] = recency_score(matrix["latest_posted_date"])
+    # competition_score: 개방경쟁 비율 그대로 사용 (0~1, 높을수록 신규진입 용이)
+    matrix["competition_score"] = matrix["open_bid_ratio"].fillna(1.0).round(3)
 
     matrix["opportunity_score"] = (
-        (matrix["count_score"] * 0.5 + matrix["amount_score"] * 0.3 + matrix["recency_score"] * 0.2)
+        (
+            matrix["count_score"] * 0.40
+            + matrix["amount_score"] * 0.25
+            + matrix["recency_score"] * 0.15
+            + matrix["competition_score"] * 0.20
+        )
         * 100
     ).round(2)
 
@@ -162,14 +155,16 @@ def build_opportunity_matrix(df: pd.DataFrame, target_districts: list[str] | Non
         "recommendation_flag"
     ] = "데이터부족"
 
-    columns = [
+    base_columns = [
         "district", "district_profile", "item_category", "bid_count", "amount_sum",
         "amount_mean", "latest_posted_date", "count_score", "amount_score",
-        "recency_score", "opportunity_score", "recommendation_flag",
+        "recency_score", "competition_score", "opportunity_score", "recommendation_flag",
     ]
+    if "city" in matrix.columns:
+        base_columns = ["city"] + base_columns
     if "avg_lead_time_days" in matrix.columns:
-        columns.append("avg_lead_time_days")
-    return matrix[columns].sort_values("opportunity_score", ascending=False).reset_index(drop=True)
+        base_columns.append("avg_lead_time_days")
+    return matrix[base_columns].sort_values("opportunity_score", ascending=False).reset_index(drop=True)
 
 
 def summarize_top_items_by_district(matrix: pd.DataFrame, top_n: int = 3) -> pd.DataFrame:

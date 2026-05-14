@@ -51,6 +51,11 @@ def setup_logger() -> logging.Logger:
     fh.setFormatter(fmt)
 
     ch = logging.StreamHandler(sys.stdout)
+    if hasattr(ch.stream, "reconfigure"):
+        try:
+            ch.stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
     ch.setFormatter(fmt)
 
     logger.addHandler(fh)
@@ -61,7 +66,7 @@ def setup_logger() -> logging.Logger:
 log = setup_logger()
 
 # ── 체크포인트 ─────────────────────────────────────────────────────
-STEPS = ["collect", "classify", "features", "competition", "consumer_fit", "done"]
+STEPS = ["collect", "classify", "features", "award", "competition", "consumer_fit", "done"]
 
 
 def read_checkpoint() -> str:
@@ -86,7 +91,7 @@ def step_collect() -> bool:
     raw = ROOT / "data" / "raw" / "seoul_bid_sample.csv"
     if raw.exists():
         size = raw.stat().st_size
-        log.info("기존 raw 파일 존재 (%d bytes) — 수집 건너뜀", size)
+        log.info("기존 raw 파일 존재 (%d bytes) --수집 건너뜀", size)
         log.info("재수집이 필요하면 %s 를 삭제 후 재실행", raw)
         return True
 
@@ -98,7 +103,7 @@ def step_collect() -> bool:
 
         df = _collect_all_districts(TARGET_DISTRICTS)
         if df.empty:
-            log.error("수집 결과 0건 — API 키·네트워크 확인 필요")
+            log.error("수집 결과 0건 --API 키·네트워크 확인 필요")
             return False
 
         save_csv(df, f"{DATA_RAW_DIR}/seoul_bid_sample.csv")
@@ -142,7 +147,7 @@ def step_classify() -> bool:
         # 검수 기준: 기타/미분류 20% 이하
         etc_rate = (classified["item_category_detail"] == "기타/미분류").sum() / len(classified) * 100
         if etc_rate > 20:
-            log.warning("[!] item_category_detail 기타/미분류 %.1f%% — 키워드 보완 필요", etc_rate)
+            log.warning("[!] item_category_detail 기타/미분류 %.1f%% --키워드 보완 필요", etc_rate)
         else:
             log.info("[OK] 기타/미분류 %.1f%% (목표 20%% 이하)", etc_rate)
 
@@ -192,6 +197,64 @@ def step_features() -> bool:
         return False
 
 
+def step_award() -> bool:
+    log.info("=" * 60)
+    log.info("STEP 4/6  낙찰  (award_result)")
+    log.info("=" * 60)
+
+    try:
+        import pandas as pd
+        from src.api.award_api import collect_awards_for_district, clean_award_data
+        from src.config.regions import REGIONS
+        from src.config.settings import DATA_PROCESSED_DIR, OUTPUT_TABLE_DIR
+        from src.utils.file_handler import save_csv
+
+        # 기존 서울 데이터 기준으로 수집 (전국은 collect 단계에서 _source_city 참조)
+        raw_path = ROOT / "data" / "raw" / "seoul_bid_sample.csv"
+        districts_to_collect = REGIONS.get("서울특별시", [])
+
+        if not raw_path.exists():
+            log.warning("raw 파일 없음 --낙찰정보 수집 건너뜀")
+            return True
+
+        frames = []
+        for district in districts_to_collect[:3]:  # 먼저 3개 구로 엔드포인트 유효성 확인
+            df = collect_awards_for_district("서울특별시", district, days_back=730)
+            if not df.empty:
+                frames.append(df)
+                log.info("낙찰 수집: %s → %d건", district, len(df))
+                break  # 유효한 엔드포인트 확인되면 나머지는 본 수집에서 처리
+
+        if not frames:
+            log.warning("낙찰정보 API 응답 없음 --엔드포인트 확인 필요 (건너뜀)")
+            return True  # 선택 단계
+
+        # 유효 확인 후 전체 수집
+        all_frames = []
+        for district in districts_to_collect:
+            df = collect_awards_for_district("서울특별시", district, days_back=730)
+            if not df.empty:
+                all_frames.append(df)
+
+        if all_frames:
+            combined = pd.concat(all_frames, ignore_index=True)
+            cleaned = clean_award_data(combined)
+            save_csv(cleaned, f"{DATA_PROCESSED_DIR}/seoul_award_cleaned.csv")
+            save_csv(
+                cleaned.groupby(["district", "district"] if "district" in cleaned.columns else ["_source_district"])
+                .agg(award_count=("sucsfbidAmt", "count"), avg_drwt_pcnt=("drwtPcnt", "mean"))
+                .reset_index(),
+                f"{OUTPUT_TABLE_DIR}/seoul_award_summary.csv",
+            )
+            log.info("낙찰정보 저장 완료: %d건", len(cleaned))
+
+        return True
+
+    except Exception as e:
+        log.exception("낙찰 수집 실패 (건너뜀): %s", e)
+        return True  # 선택 단계
+
+
 def step_competition() -> bool:
     log.info("=" * 60)
     log.info("STEP 4/5  경쟁  (competition_matrix)")
@@ -204,7 +267,7 @@ def step_competition() -> bool:
 
         matrix = build_competition_matrix(TARGET_DISTRICTS)
         if matrix.empty:
-            log.warning("경쟁 데이터 없음 — 소상공인 API 확인 필요 (건너뜀)")
+            log.warning("경쟁 데이터 없음 --소상공인 API 확인 필요 (건너뜀)")
             return True  # 선택 단계이므로 실패해도 파이프라인 계속
 
         save_csv(matrix, "outputs/tables/seoul_competition_matrix.csv")
@@ -227,7 +290,7 @@ def step_consumer_fit() -> bool:
 
         result = build_consumer_fit_score()
         if result.empty:
-            log.warning("연령 데이터 없음 — 행안부 API 확인 필요 (건너뜀)")
+            log.warning("연령 데이터 없음 --행안부 API 확인 필요 (건너뜀)")
             return True
 
         save_csv(result, "outputs/tables/seoul_consumer_fit.csv")
@@ -245,6 +308,7 @@ STEP_FUNCS = {
     "collect":      step_collect,
     "classify":     step_classify,
     "features":     step_features,
+    "award":        step_award,
     "competition":  step_competition,
     "consumer_fit": step_consumer_fit,
 }

@@ -15,9 +15,10 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://apis.data.go.kr/B553077/api/open/sdsc2/storeListInDong"
 
-# 소상공인 API 시군구코드 (법정동코드 앞 5자리 기준 — 표준 행정코드와 다름)
-# API 실측 확인된 코드에 * 표시
+# 소상공인 API 시군구코드 (행정동코드 앞 5자리 기준)
+# API 실측 확인된 코드에 * 표시 / 패턴 기반 추정 코드에 ~ 표시 (실행 전 validate_signgu_codes() 권장)
 DISTRICT_SIGNGU_CD: dict[str, str] = {
+    # ── 서울특별시 (11) ──────────────────────────────────────────
     "종로구": "11110",   # *확인
     "중구": "11020",
     "용산구": "11030",
@@ -43,6 +44,37 @@ DISTRICT_SIGNGU_CD: dict[str, str] = {
     "강남구": "11680",   # *확인
     "송파구": "11710",   # *확인
     "강동구": "11740",
+    # ── 부산광역시 (26) ──────────────────────────────────────────
+    "부산진구": "26230", # ~추정
+    "해운대구": "26350", # ~추정
+    "동래구":   "26260", # ~추정
+    "남구":     "26290", # ~추정 (부산)
+    "북구":     "26320", # ~추정 (부산)
+    "사하구":   "26380", # ~추정
+    "금정구":   "26410", # ~추정
+    "연제구":   "26470", # ~추정
+    "수영구":   "26500", # ~추정
+    "사상구":   "26530", # ~추정
+    "기장군":   "26710", # ~추정
+    # ── 대구광역시 (27) ──────────────────────────────────────────
+    "수성구":   "27260", # ~추정
+    "달서구":   "27290", # ~추정
+    "달성군":   "27710", # ~추정
+    # ── 인천광역시 (28) ──────────────────────────────────────────
+    "미추홀구": "28177", # ~추정
+    "연수구":   "28185", # ~추정
+    "남동구":   "28200", # ~추정
+    "부평구":   "28237", # ~추정
+    "계양구":   "28245", # ~추정
+    # ── 광주광역시 (29) ──────────────────────────────────────────
+    "광산구":   "29200", # ~추정
+    # ── 대전광역시 (30) ──────────────────────────────────────────
+    "유성구":   "30200", # ~추정
+    "대덕구":   "30230", # ~추정
+    # ── 울산광역시 (31) ──────────────────────────────────────────
+    "울주군":   "31710", # ~추정
+    # ── 세종특별자치시 (36) ─────────────────────────────────────
+    "세종시":   "36110", # ~추정
 }
 
 # 업종대분류코드 → 우리 품목군 매핑 (소상공인 업종 기준)
@@ -147,3 +179,31 @@ def fetch_store_counts(district: str, max_pages: int = 50) -> pd.DataFrame:
     )
     counts.insert(0, "district", district)
     return counts
+
+
+def validate_signgu_codes(districts: list[str] | None = None) -> dict[str, bool]:
+    """
+    DISTRICT_SIGNGU_CD 코드를 실제 API 호출로 검증합니다.
+    districts=None이면 전체 코드를 검증합니다.
+
+    Returns:
+        {district: True/False} — True면 유효한 코드
+    """
+    targets = districts or list(DISTRICT_SIGNGU_CD.keys())
+    results = {}
+    for dist in targets:
+        cd = DISTRICT_SIGNGU_CD.get(dist)
+        if not cd:
+            results[dist] = False
+            continue
+        try:
+            data = _fetch_page(cd, page=1, num_rows=1)
+            rc = data.get("header", {}).get("resultCode", "")
+            valid = rc == "00"
+        except Exception:
+            valid = False
+        results[dist] = valid
+        status = "OK" if valid else "FAIL"
+        logger.info("[%s] %s (%s)", status, dist, cd)
+        time.sleep(0.2)
+    return results

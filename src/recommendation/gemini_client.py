@@ -50,13 +50,14 @@ _SYSTEM_INSTRUCTION = """당신은 공공조달 입찰공고 데이터를 분석
 - 2~3문장, 한국어로 간결하게
 - 수치는 구체적으로 언급"""
 
-_USER_TEMPLATE = """다음은 서울 {district} 자치구의 공공조달 수요 데이터입니다.
+_USER_TEMPLATE = """다음은 {city} {district}의 공공조달 수요 데이터입니다.
 
 품목군: {item_category}
 - 최근 2년 공고 건수: {bid_count}건
 - 총 발주 추정 금액: {amount_sum_str}
-- 공공수요 점수: {opportunity_score:.1f}점 (100점 만점, 공고수·금액·최근성 종합)
+- 공공수요 점수: {opportunity_score:.1f}점 (100점 만점, 공고수·금액·최근성·경쟁도 종합)
 - 소비층 적합도: {consumer_fit_str}
+- 시장 개방도: {competition_str}
 {stores_line}
 위 데이터를 바탕으로 이 품목군의 공공조달 수요 특성을 설명해주세요.
 창업 성공 여부가 아닌, 공공기관의 발주 패턴과 수요 규모 관점에서 서술하세요."""
@@ -70,8 +71,10 @@ class DemandContext:
     amount_sum: float
     opportunity_score: float
     recommendation_flag: str
+    city: str = "서울특별시"
     consumer_fit_score: float | None = None
     stores_per_10k: float | None = None
+    competition_score: float | None = None  # 개방경쟁 비율 (0~1)
 
 
 def _format_amount(amount: float) -> str:
@@ -113,14 +116,21 @@ def build_demand_summary(ctx: DemandContext) -> str:
             if ctx.stores_per_10k is not None
             else ""
         )
+        if ctx.competition_score is not None:
+            pct = ctx.competition_score * 100
+            competition_str = f"{pct:.0f}% (지명경쟁 제외 개방입찰 비율, 높을수록 신규진입 용이)"
+        else:
+            competition_str = "데이터 없음"
 
         prompt = _USER_TEMPLATE.format(
+            city=ctx.city,
             district=ctx.district,
             item_category=ctx.item_category,
             bid_count=ctx.bid_count,
             amount_sum_str=_format_amount(ctx.amount_sum),
             opportunity_score=ctx.opportunity_score,
             consumer_fit_str=consumer_fit_str,
+            competition_str=competition_str,
             stores_line=stores_line,
         )
 
@@ -158,11 +168,12 @@ def build_demand_summary(ctx: DemandContext) -> str:
 def _fallback_summary(ctx: DemandContext, error: str = "") -> str:
     """API 키 없거나 오류 시 수치 기반 정적 문구 반환"""
     amount_str = _format_amount(ctx.amount_sum)
+    region_label = f"{ctx.city} {ctx.district}" if ctx.city and ctx.city not in ctx.district else ctx.district
     lines = [
-        f"최근 2년간 {ctx.district}에서 **{ctx.item_category}** 관련 공고가 {ctx.bid_count}건 발생했으며, "
+        f"최근 2년간 {region_label}에서 **{ctx.item_category}** 관련 공고가 {ctx.bid_count}건 발생했으며, "
         f"총 발주 추정 금액은 {amount_str}입니다.",
         f"공공수요 점수는 {ctx.opportunity_score:.1f}점으로, "
-        f"공고 수·금액 규모·최근성을 종합한 참고 지표입니다.",
+        f"공고 수·금액 규모·최근성·경쟁도를 종합한 참고 지표입니다.",
     ]
     if error:
         lines.append(f"_(AI 해석 생성 실패: {error[:60]})_")

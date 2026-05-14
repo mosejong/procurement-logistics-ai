@@ -8,20 +8,36 @@ import signal
 import pandas as pd
 import streamlit as st
 
+from src.config.regions import CITY_LABELS, REGIONS
 from src.recommendation.business_type_map import search_business_type, suggest_similar
 
 
 ROOT = Path(__file__).parent
+TABLES_DIR = ROOT / "outputs" / "tables"
+FIGURES_DIR = ROOT / "outputs" / "figures"
+REPORTS_DIR = ROOT / "outputs" / "reports"
+PROCESSED_DIR = ROOT / "data" / "processed"
 
-MATRIX_PATH = ROOT / "outputs" / "tables" / "seoul_opportunity_matrix.csv"
-TOP_ITEMS_PATH = ROOT / "outputs" / "tables" / "seoul_top_items_by_district.csv"
-FEATURE_PATH = ROOT / "outputs" / "tables" / "seoul_feature_table.csv"
-COMPETITION_PATH = ROOT / "outputs" / "tables" / "seoul_competition_matrix.csv"
-CONSUMER_FIT_PATH = ROOT / "outputs" / "tables" / "seoul_consumer_fit.csv"
-CLASSIFIED_PATH = ROOT / "data" / "processed" / "seoul_bid_classified.csv"
-CLEANED_PATH = ROOT / "data" / "processed" / "seoul_bid_cleaned.csv"
-HEATMAP_PATH = ROOT / "outputs" / "figures" / "seoul_opportunity_heatmap.png"
-REPORT_PATH = ROOT / "outputs" / "reports" / "seoul_sample_summary.md"
+# 전국 데이터 우선, 없으면 서울 데이터로 폴백
+def _find_table(national_name: str, seoul_name: str) -> Path:
+    national = TABLES_DIR / national_name
+    return national if national.exists() else TABLES_DIR / seoul_name
+
+MATRIX_PATH = _find_table("opportunity_matrix_national.csv", "seoul_opportunity_matrix.csv")
+TOP_ITEMS_PATH = _find_table("top_items_by_district_national.csv", "seoul_top_items_by_district.csv")
+FEATURE_PATH = _find_table("feature_table_national.csv", "seoul_feature_table.csv")
+COMPETITION_PATH = TABLES_DIR / "seoul_competition_matrix.csv"
+CONSUMER_FIT_PATH = TABLES_DIR / "seoul_consumer_fit.csv"
+CLASSIFIED_PATH = PROCESSED_DIR / "bid_classified_national.csv"
+if not CLASSIFIED_PATH.exists():
+    CLASSIFIED_PATH = PROCESSED_DIR / "seoul_bid_classified.csv"
+CLEANED_PATH = PROCESSED_DIR / "bid_cleaned_national.csv"
+if not CLEANED_PATH.exists():
+    CLEANED_PATH = PROCESSED_DIR / "seoul_bid_cleaned.csv"
+HEATMAP_PATH = FIGURES_DIR / "seoul_opportunity_heatmap.png"
+REPORT_PATH = REPORTS_DIR / "national_summary.md"
+if not REPORT_PATH.exists():
+    REPORT_PATH = REPORTS_DIR / "seoul_sample_summary.md"
 
 
 def load_csv(path: Path) -> pd.DataFrame:
@@ -49,17 +65,19 @@ def show_score_formula():
     with st.expander("📐 추천 점수(opportunity_score) 계산 방식"):
         st.markdown(
             """
-**opportunity_score = 공고수 점수 × 50% + 금액 점수 × 30% + 최근성 점수 × 20%**
+**opportunity_score = 공고수×40% + 금액×25% + 최근성×15% + 경쟁도×20%**
 
 | 구성 요소 | 가중치 | 원본 값 | 계산 방식 |
 |---|---|---|---|
-| 공고수 점수 (count_score) | 50% | bid_count | 전체 구 중 min-max 정규화 (0~1) |
-| 금액 점수 (amount_score) | 30% | amount_sum | 전체 구 중 min-max 정규화 (0~1) |
-| 최근성 점수 (recency_score) | 20% | latest_posted_date | 1 ÷ (1 + 경과일/30) |
+| 공고수 점수 (count_score) | 40% | bid_count | 전체 구 중 min-max 정규화 (0~1) |
+| 금액 점수 (amount_score) | 25% | amount_sum | 전체 구 중 min-max 정규화 (0~1) |
+| 최근성 점수 (recency_score) | 15% | latest_posted_date | 1 ÷ (1 + 경과일/30) |
+| 경쟁도 점수 (competition_score) | 20% | dsgntCmptYn | 개방입찰 비율 (지명경쟁 제외) |
 
-> **공고 수 < 이지만 추천 순위가 높은 경우**: 최근 공고일수록 최근성 점수가 높아지고,
-> 금액이 클수록 금액 점수가 올라가기 때문입니다.
-> 즉, 공고 2건이라도 억 단위 금액이거나 최근 발주라면 충분히 상위 순위가 될 수 있습니다.
+> **경쟁도**: 조달청 입찰공고의 `지명경쟁여부(dsgntCmptYn)` 컬럼 기반.
+> 지명경쟁(기존 업체만 참여 가능)이 적을수록 신규창업자 진입 여지가 높아 점수가 높습니다.
+
+> **공고 수가 적지만 순위가 높은 경우**: 금액이 크거나, 최근 발주이거나, 개방입찰 비율이 높기 때문입니다.
             """
         )
 
@@ -67,12 +85,12 @@ def show_score_formula():
 def build_score_breakdown(df: pd.DataFrame) -> pd.DataFrame:
     """추천 점수 구성 요소를 한눈에 보는 비교표 생성"""
     cols = ["district", "bid_count", "amount_sum", "latest_posted_date",
-            "count_score", "amount_score", "recency_score", "opportunity_score"]
+            "count_score", "amount_score", "recency_score", "competition_score", "opportunity_score"]
     available = [c for c in cols if c in df.columns]
     result = df[available].copy()
     if "amount_sum" in result.columns:
         result["amount_sum"] = result["amount_sum"].apply(format_won)
-    for col in ["count_score", "amount_score", "recency_score", "opportunity_score"]:
+    for col in ["count_score", "amount_score", "recency_score", "competition_score", "opportunity_score"]:
         if col in result.columns:
             result[col] = result[col].apply(format_score)
     return result.rename(columns={
@@ -80,33 +98,60 @@ def build_score_breakdown(df: pd.DataFrame) -> pd.DataFrame:
         "bid_count": "공고 수",
         "amount_sum": "총 금액",
         "latest_posted_date": "최근 공고일",
-        "count_score": "공고수 점수(×0.5)",
-        "amount_score": "금액 점수(×0.3)",
-        "recency_score": "최근성 점수(×0.2)",
-        "opportunity_score": "최종 추천 점수",
+        "count_score": "공고수(×0.40)",
+        "amount_score": "금액(×0.25)",
+        "recency_score": "최근성(×0.15)",
+        "competition_score": "경쟁도(×0.20)",
+        "opportunity_score": "최종 점수",
     })
 
 
 # ── 데이터 로드 ──────────────────────────────────────────────────────────────
 st.set_page_config(page_title="공공조달 창업기회 분석", layout="wide")
 
-matrix = load_csv(MATRIX_PATH)
-top_items = load_csv(TOP_ITEMS_PATH)
-features = load_csv(FEATURE_PATH)
+matrix_all = load_csv(MATRIX_PATH)
+top_items_all = load_csv(TOP_ITEMS_PATH)
+features_all = load_csv(FEATURE_PATH)
 competition = load_csv(COMPETITION_PATH)
 consumer_fit = load_csv(CONSUMER_FIT_PATH)
-classified = load_csv(CLASSIFIED_PATH)
-cleaned = load_csv(CLEANED_PATH)
+classified_all = load_csv(CLASSIFIED_PATH)
+cleaned_all = load_csv(CLEANED_PATH)
 
-# features가 없으면 matrix로 대체
-if features.empty:
-    features = matrix.copy()
+if features_all.empty:
+    features_all = matrix_all.copy()
 
 # ── 사이드바 네비게이션 ─────────────────────────────────────────────────────
 page = st.sidebar.radio(
     "화면 선택",
     ["📋 프로젝트 개요", "🔍 사업 유형 검색", "🗺️ 지역 분석", "📦 품목 분석", "⚖️ 자치구 비교", "👥 소비층 적합도", "🏪 경쟁 분석", "📊 원천 데이터"],
 )
+
+# ── 시/도 필터 ──────────────────────────────────────────────────────────────
+st.sidebar.divider()
+_has_city = "city" in features_all.columns and not features_all.empty
+if _has_city:
+    _available_cities = sorted(features_all["city"].dropna().unique().tolist())
+    _city_label_map = {c: CITY_LABELS.get(c, c) for c in _available_cities}
+    _selected_city_label = st.sidebar.selectbox(
+        "시/도 선택",
+        ["전체"] + [_city_label_map[c] for c in _available_cities],
+    )
+    _label_city_map = {v: k for k, v in _city_label_map.items()}
+    _selected_city = None if _selected_city_label == "전체" else _label_city_map.get(_selected_city_label)
+else:
+    _selected_city = None
+
+def _filter_by_city(df: pd.DataFrame) -> pd.DataFrame:
+    """선택된 시/도로 데이터프레임을 필터링합니다. city 컬럼이 없으면 그대로 반환."""
+    if _selected_city is None or "city" not in df.columns or df.empty:
+        return df
+    return df[df["city"] == _selected_city].copy()
+
+matrix = _filter_by_city(matrix_all)
+features = _filter_by_city(features_all)
+classified = _filter_by_city(classified_all)
+cleaned = _filter_by_city(cleaned_all)
+top_items = _filter_by_city(top_items_all)
 
 st.sidebar.divider()
 if st.sidebar.button("⏹ 서버 종료", type="secondary", use_container_width=True):
@@ -369,11 +414,12 @@ elif page == "📋 프로젝트 개요":
     st.code(
         """
 조달청 입찰공고 API (자치구별 수집)
-  → 자치구 / 품목군 / 금액 / 공고일 정제
+  → 자치구 / 품목군 / 금액 / 공고일 / 지명경쟁여부 정제
   → 자치구 × 품목군 매트릭스 생성
-  → 공고 수(50%) + 금액(30%) + 최근성(20%) → opportunity_score
+  → 공고수(40%) + 금액(25%) + 최근성(15%) + 경쟁도(20%) → opportunity_score
   → 인구/세대 보정 → bids_per_10k_population
   → TOP 품목 추천 / 히트맵 / 리포트 생성
+  → 생성형 AI(Gemini)가 수치를 받아 사용자 친화적 설명 생성
         """,
         language="text",
     )
@@ -383,9 +429,10 @@ elif page == "📋 프로젝트 개요":
         """
 | 지표 | 가중치 | 의미 | 한계 |
 |---|---|---|---|
-| 공고 수 | 50% | 반복 수요 여부 | 기관 수 많은 구 유리 |
-| 금액 규모 | 30% | 구매 규모 | 대형 1건 > 소형 다건 가능 |
-| 최근성 | 20% | 현재성 | 계절성·일회성 구분 불가 |
+| 공고 수 | 40% | 반복 수요 여부 | 기관 수 많은 구 유리 |
+| 금액 규모 | 25% | 구매 규모 | 대형 1건 > 소형 다건 가능 |
+| 최근성 | 15% | 현재성 | 계절성·일회성 구분 불가 |
+| 경쟁도 | 20% | 신규진입 용이성 (개방입찰 비율) | 지명경쟁 외 다수경쟁 구분 불가 |
 
 > **bids_per_10k_population** = 인구 1만 명당 공고 수. 큰 구의 규모 편향을 보정합니다.
 
@@ -486,6 +533,13 @@ elif page == "🗺️ 지역 분석":
         if not top3.empty:
             from src.recommendation.gemini_client import build_demand_summary, DemandContext
 
+            # 현재 지역의 시/도 확인
+            _city_for_district = "서울특별시"
+            if "city" in result.columns and not result.empty:
+                _city_rows = result["city"].dropna()
+                if not _city_rows.empty:
+                    _city_for_district = _city_rows.iloc[0]
+
             # 지역 전환 감지 → 이전 지역 캐시 삭제 (잔상 방지)
             if st.session_state.get("ai_district") != selected:
                 prev = st.session_state.get("ai_district", "")
@@ -525,7 +579,15 @@ elif page == "🗺️ 지역 분석":
                                 if not fit_row.empty:
                                     fit_score = float(fit_row.iloc[0]["consumer_fit_score"])
 
+                            comp_score = None
+                            if hasattr(row, "competition_score"):
+                                try:
+                                    comp_score = float(row.competition_score)
+                                except (TypeError, ValueError):
+                                    pass
+
                             ctx = DemandContext(
+                                city=_city_for_district,
                                 district=selected,
                                 item_category=row.item_category,
                                 bid_count=int(row.bid_count),
@@ -534,6 +596,7 @@ elif page == "🗺️ 지역 분석":
                                 recommendation_flag=flag,
                                 consumer_fit_score=fit_score,
                                 stores_per_10k=None,
+                                competition_score=comp_score,
                             )
                             st.session_state["gemini_cache"][cache_key] = build_demand_summary(ctx)
 
