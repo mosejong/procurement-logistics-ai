@@ -1,0 +1,628 @@
+﻿district_cd,district,industry_cd,industry_nm,year,biz_count,emp_count,region,item_category
+001001,수원시,002,Agriculture forestry and fishing,2022,26,264,경기도,
+001001,수원시,003,Mining ＆ quarrying,2022,3,6,경기도,
+001001,수원시,004,Manufacturing,2022,5493,39827,경기도,IT장비/전산
+001001,수원시,005,Electricity gas steam and water supply,2022,73,654,경기도,시설유지보수
+001001,수원시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,129,1477,경기도,폐기물/환경
+001001,수원시,007,Construction,2022,9373,31550,경기도,건설/공사
+001001,수원시,008,Wholesale and retail trade,2022,28383,66606,경기도,사무용품/소모품
+001001,수원시,009,Transportation,2022,10918,21799,경기도,차량/운송
+001001,수원시,010,Accommodation and food service activities,2022,16119,47462,경기도,
+001001,수원시,011,Information and communications,2022,2507,9442,경기도,IT장비/전산
+001001,수원시,012,Financial and insurance activities,2022,1203,13972,경기도,
+001001,수원시,013,Real estate activites and renting and leasing,2022,6380,15773,경기도,
+001001,수원시,014,Professional scientific and technical activities,2022,5156,64118,경기도,전문용역/컨설팅
+001001,수원시,015,Business facilities managementand business support services,2022,3024,37724,경기도,시설유지보수
+001001,수원시,016,Public administration ; compulsory social security,2022,146,21375,경기도,
+001001,수원시,017,Education,2022,6317,39182,경기도,교육물품/교구
+001001,수원시,018,Human health and social work activities,2022,3562,50988,경기도,의료/복지용품
+001001,수원시,019,Arts sports and recreation related services,2022,3259,8814,경기도,
+001001,수원시,020,Membership organizations repair and other personal services,2022,10211,19774,경기도,
+001002,성남시,002,Agriculture forestry and fishing,2022,24,113,경기도,
+001002,성남시,003,Mining ＆ quarrying,2022,1,1,경기도,
+001002,성남시,004,Manufacturing,2022,6046,40545,경기도,IT장비/전산
+001002,성남시,005,Electricity gas steam and water supply,2022,138,1500,경기도,시설유지보수
+001002,성남시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,114,1642,경기도,폐기물/환경
+001002,성남시,007,Construction,2022,5533,32174,경기도,건설/공사
+001002,성남시,008,Wholesale and retail trade,2022,26158,76315,경기도,사무용품/소모품
+001002,성남시,009,Transportation,2022,8702,17121,경기도,차량/운송
+001002,성남시,010,Accommodation and food service activities,2022,12106,38539,경기도,
+001002,성남시,011,Information and communications,2022,4905,90340,경기도,IT장비/전산
+001002,성남시,012,Financial and insurance activities,2022,1077,14405,경기도,
+001002,성남시,013,Real estate activites and renting and leasing,2022,6035,18250,경기도,
+001002,성남시,014,Professional scientific and technical activities,2022,5670,58037,경기도,전문용역/컨설팅
+001002,성남시,015,Business facilities managementand business support services,2022,2278,30511,경기도,시설유지보수
+001002,성남시,016,Public administration ; compulsory social security,2022,132,12220,경기도,
+001002,성남시,017,Education,2022,5309,34875,경기도,교육물품/교구
+001002,성남시,018,Human health and social work activities,2022,3214,45595,경기도,의료/복지용품
+001002,성남시,019,Arts sports and recreation related services,2022,2698,7874,경기도,
+001002,성남시,020,Membership organizations repair and other personal services,2022,7456,17151,경기도,
+001003,안양시,002,Agriculture forestry and fishing,2022,5,14,경기도,
+001003,안양시,003,Mining ＆ quarrying,2022,2,32,경기도,
+001003,안양시,004,Manufacturing,2022,5175,34523,경기도,IT장비/전산
+001003,안양시,005,Electricity gas steam and water supply,2022,36,394,경기도,시설유지보수
+001003,안양시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,77,1288,경기도,폐기물/환경
+001003,안양시,007,Construction,2022,3884,22707,경기도,건설/공사
+001003,안양시,008,Wholesale and retail trade,2022,17908,43726,경기도,사무용품/소모품
+001003,안양시,009,Transportation,2022,7607,12937,경기도,차량/운송
+001003,안양시,010,Accommodation and food service activities,2022,7402,20941,경기도,
+001003,안양시,011,Information and communications,2022,2373,12575,경기도,IT장비/전산
+001003,안양시,012,Financial and insurance activities,2022,693,7769,경기도,
+001003,안양시,013,Real estate activites and renting and leasing,2022,3902,9565,경기도,
+001003,안양시,014,Professional scientific and technical activities,2022,3960,29286,경기도,전문용역/컨설팅
+001003,안양시,015,Business facilities managementand business support services,2022,1462,18839,경기도,시설유지보수
+001003,안양시,016,Public administration ; compulsory social security,2022,72,6473,경기도,
+001003,안양시,017,Education,2022,3065,19679,경기도,교육물품/교구
+001003,안양시,018,Human health and social work activities,2022,1773,22038,경기도,의료/복지용품
+001003,안양시,019,Arts sports and recreation related services,2022,1566,3921,경기도,
+001003,안양시,020,Membership organizations repair and other personal services,2022,4760,9396,경기도,
+001004,부천시,002,Agriculture forestry and fishing,2022,9,39,경기도,
+001004,부천시,003,Mining ＆ quarrying,2022,0,0,경기도,
+001004,부천시,004,Manufacturing,2022,13201,65870,경기도,IT장비/전산
+001004,부천시,005,Electricity gas steam and water supply,2022,20,259,경기도,시설유지보수
+001004,부천시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,138,1687,경기도,폐기물/환경
+001004,부천시,007,Construction,2022,5794,22505,경기도,건설/공사
+001004,부천시,008,Wholesale and retail trade,2022,21754,47875,경기도,사무용품/소모품
+001004,부천시,009,Transportation,2022,9696,15129,경기도,차량/운송
+001004,부천시,010,Accommodation and food service activities,2022,10649,27214,경기도,
+001004,부천시,011,Information and communications,2022,1976,6296,경기도,IT장비/전산
+001004,부천시,012,Financial and insurance activities,2022,836,9756,경기도,
+001004,부천시,013,Real estate activites and renting and leasing,2022,4117,10029,경기도,
+001004,부천시,014,Professional scientific and technical activities,2022,2816,10121,경기도,전문용역/컨설팅
+001004,부천시,015,Business facilities managementand business support services,2022,2033,20579,경기도,시설유지보수
+001004,부천시,016,Public administration ; compulsory social security,2022,81,6469,경기도,
+001004,부천시,017,Education,2022,3438,21456,경기도,교육물품/교구
+001004,부천시,018,Human health and social work activities,2022,2441,36132,경기도,의료/복지용품
+001004,부천시,019,Arts sports and recreation related services,2022,2341,5228,경기도,
+001004,부천시,020,Membership organizations repair and other personal services,2022,7388,13206,경기도,
+001005,광명시,002,Agriculture forestry and fishing,2022,4,14,경기도,
+001005,광명시,003,Mining ＆ quarrying,2022,0,0,경기도,
+001005,광명시,004,Manufacturing,2022,2336,16411,경기도,IT장비/전산
+001005,광명시,005,Electricity gas steam and water supply,2022,10,105,경기도,시설유지보수
+001005,광명시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,48,385,경기도,폐기물/환경
+001005,광명시,007,Construction,2022,1433,8082,경기도,건설/공사
+001005,광명시,008,Wholesale and retail trade,2022,7424,19144,경기도,사무용품/소모품
+001005,광명시,009,Transportation,2022,3369,6326,경기도,차량/운송
+001005,광명시,010,Accommodation and food service activities,2022,3062,9524,경기도,
+001005,광명시,011,Information and communications,2022,690,2375,경기도,IT장비/전산
+001005,광명시,012,Financial and insurance activities,2022,165,1944,경기도,
+001005,광명시,013,Real estate activites and renting and leasing,2022,1355,3640,경기도,
+001005,광명시,014,Professional scientific and technical activities,2022,898,3842,경기도,전문용역/컨설팅
+001005,광명시,015,Business facilities managementand business support services,2022,492,5218,경기도,시설유지보수
+001005,광명시,016,Public administration ; compulsory social security,2022,42,3780,경기도,
+001005,광명시,017,Education,2022,1484,8637,경기도,교육물품/교구
+001005,광명시,018,Human health and social work activities,2022,915,12148,경기도,의료/복지용품
+001005,광명시,019,Arts sports and recreation related services,2022,624,2595,경기도,
+001005,광명시,020,Membership organizations repair and other personal services,2022,2043,3798,경기도,
+001006,평택시,002,Agriculture forestry and fishing,2022,127,785,경기도,
+001006,평택시,003,Mining ＆ quarrying,2022,5,42,경기도,
+001006,평택시,004,Manufacturing,2022,5745,99320,경기도,IT장비/전산
+001006,평택시,005,Electricity gas steam and water supply,2022,372,1652,경기도,시설유지보수
+001006,평택시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,229,2043,경기도,폐기물/환경
+001006,평택시,007,Construction,2022,7112,23272,경기도,건설/공사
+001006,평택시,008,Wholesale and retail trade,2022,12869,29330,경기도,사무용품/소모품
+001006,평택시,009,Transportation,2022,7487,18498,경기도,차량/운송
+001006,평택시,010,Accommodation and food service activities,2022,9468,24251,경기도,
+001006,평택시,011,Information and communications,2022,736,1655,경기도,IT장비/전산
+001006,평택시,012,Financial and insurance activities,2022,366,3770,경기도,
+001006,평택시,013,Real estate activites and renting and leasing,2022,3646,6757,경기도,
+001006,평택시,014,Professional scientific and technical activities,2022,1576,7236,경기도,전문용역/컨설팅
+001006,평택시,015,Business facilities managementand business support services,2022,1796,14340,경기도,시설유지보수
+001006,평택시,016,Public administration ; compulsory social security,2022,90,6606,경기도,
+001006,평택시,017,Education,2022,2395,14112,경기도,교육물품/교구
+001006,평택시,018,Human health and social work activities,2022,1465,19065,경기도,의료/복지용품
+001006,평택시,019,Arts sports and recreation related services,2022,1310,2769,경기도,
+001006,평택시,020,Membership organizations repair and other personal services,2022,4857,8346,경기도,
+001007,안산시,002,Agriculture forestry and fishing,2022,48,219,경기도,
+001007,안산시,003,Mining ＆ quarrying,2022,7,53,경기도,
+001007,안산시,004,Manufacturing,2022,12335,119210,경기도,IT장비/전산
+001007,안산시,005,Electricity gas steam and water supply,2022,84,849,경기도,시설유지보수
+001007,안산시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,223,2158,경기도,폐기물/환경
+001007,안산시,007,Construction,2022,9688,24867,경기도,건설/공사
+001007,안산시,008,Wholesale and retail trade,2022,17747,39540,경기도,사무용품/소모품
+001007,안산시,009,Transportation,2022,9489,15291,경기도,차량/운송
+001007,안산시,010,Accommodation and food service activities,2022,10593,25355,경기도,
+001007,안산시,011,Information and communications,2022,999,2626,경기도,IT장비/전산
+001007,안산시,012,Financial and insurance activities,2022,589,7217,경기도,
+001007,안산시,013,Real estate activites and renting and leasing,2022,3526,8034,경기도,
+001007,안산시,014,Professional scientific and technical activities,2022,2593,11124,경기도,전문용역/컨설팅
+001007,안산시,015,Business facilities managementand business support services,2022,2073,14188,경기도,시설유지보수
+001007,안산시,016,Public administration ; compulsory social security,2022,96,6636,경기도,
+001007,안산시,017,Education,2022,2534,18199,경기도,교육물품/교구
+001007,안산시,018,Human health and social work activities,2022,1878,29084,경기도,의료/복지용품
+001007,안산시,019,Arts sports and recreation related services,2022,2097,4907,경기도,
+001007,안산시,020,Membership organizations repair and other personal services,2022,5924,10142,경기도,
+001008,과천시,002,Agriculture forestry and fishing,2022,7,27,경기도,
+001008,과천시,003,Mining ＆ quarrying,2022,0,0,경기도,
+001008,과천시,004,Manufacturing,2022,141,461,경기도,IT장비/전산
+001008,과천시,005,Electricity gas steam and water supply,2022,8,13,경기도,시설유지보수
+001008,과천시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,16,413,경기도,폐기물/환경
+001008,과천시,007,Construction,2022,249,2730,경기도,건설/공사
+001008,과천시,008,Wholesale and retail trade,2022,2098,5158,경기도,사무용품/소모품
+001008,과천시,009,Transportation,2022,574,1020,경기도,차량/운송
+001008,과천시,010,Accommodation and food service activities,2022,598,2435,경기도,
+001008,과천시,011,Information and communications,2022,240,2209,경기도,IT장비/전산
+001008,과천시,012,Financial and insurance activities,2022,49,586,경기도,
+001008,과천시,013,Real estate activites and renting and leasing,2022,385,1062,경기도,
+001008,과천시,014,Professional scientific and technical activities,2022,320,5516,경기도,전문용역/컨설팅
+001008,과천시,015,Business facilities managementand business support services,2022,123,1386,경기도,시설유지보수
+001008,과천시,016,Public administration ; compulsory social security,2022,32,5518,경기도,
+001008,과천시,017,Education,2022,380,2276,경기도,교육물품/교구
+001008,과천시,018,Human health and social work activities,2022,194,2163,경기도,의료/복지용품
+001008,과천시,019,Arts sports and recreation related services,2022,458,5099,경기도,
+001008,과천시,020,Membership organizations repair and other personal services,2022,346,1070,경기도,
+001009,오산시,002,Agriculture forestry and fishing,2022,5,72,경기도,
+001009,오산시,003,Mining ＆ quarrying,2022,0,0,경기도,
+001009,오산시,004,Manufacturing,2022,1482,14718,경기도,IT장비/전산
+001009,오산시,005,Electricity gas steam and water supply,2022,15,153,경기도,시설유지보수
+001009,오산시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,64,651,경기도,폐기물/환경
+001009,오산시,007,Construction,2022,1972,6318,경기도,건설/공사
+001009,오산시,008,Wholesale and retail trade,2022,4713,10626,경기도,사무용품/소모품
+001009,오산시,009,Transportation,2022,2505,4688,경기도,차량/운송
+001009,오산시,010,Accommodation and food service activities,2022,2992,8324,경기도,
+001009,오산시,011,Information and communications,2022,288,732,경기도,IT장비/전산
+001009,오산시,012,Financial and insurance activities,2022,120,1019,경기도,
+001009,오산시,013,Real estate activites and renting and leasing,2022,1017,2282,경기도,
+001009,오산시,014,Professional scientific and technical activities,2022,534,2434,경기도,전문용역/컨설팅
+001009,오산시,015,Business facilities managementand business support services,2022,706,6609,경기도,시설유지보수
+001009,오산시,016,Public administration ; compulsory social security,2022,25,2098,경기도,
+001009,오산시,017,Education,2022,1037,7112,경기도,교육물품/교구
+001009,오산시,018,Human health and social work activities,2022,659,8192,경기도,의료/복지용품
+001009,오산시,019,Arts sports and recreation related services,2022,583,1416,경기도,
+001009,오산시,020,Membership organizations repair and other personal services,2022,1723,3128,경기도,
+001010,시흥시,002,Agriculture forestry and fishing,2022,19,61,경기도,
+001010,시흥시,003,Mining ＆ quarrying,2022,0,0,경기도,
+001010,시흥시,004,Manufacturing,2022,17184,94181,경기도,IT장비/전산
+001010,시흥시,005,Electricity gas steam and water supply,2022,64,219,경기도,시설유지보수
+001010,시흥시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,184,1438,경기도,폐기물/환경
+001010,시흥시,007,Construction,2022,4820,14775,경기도,건설/공사
+001010,시흥시,008,Wholesale and retail trade,2022,17349,37701,경기도,사무용품/소모품
+001010,시흥시,009,Transportation,2022,7881,12689,경기도,차량/운송
+001010,시흥시,010,Accommodation and food service activities,2022,7672,18652,경기도,
+001010,시흥시,011,Information and communications,2022,762,1701,경기도,IT장비/전산
+001010,시흥시,012,Financial and insurance activities,2022,263,2042,경기도,
+001010,시흥시,013,Real estate activites and renting and leasing,2022,2707,5374,경기도,
+001010,시흥시,014,Professional scientific and technical activities,2022,1586,5084,경기도,전문용역/컨설팅
+001010,시흥시,015,Business facilities managementand business support services,2022,1401,6259,경기도,시설유지보수
+001010,시흥시,016,Public administration ; compulsory social security,2022,56,4340,경기도,
+001010,시흥시,017,Education,2022,2512,13781,경기도,교육물품/교구
+001010,시흥시,018,Human health and social work activities,2022,1503,18375,경기도,의료/복지용품
+001010,시흥시,019,Arts sports and recreation related services,2022,1506,2845,경기도,
+001010,시흥시,020,Membership organizations repair and other personal services,2022,4005,6474,경기도,
+001011,군포시,002,Agriculture forestry and fishing,2022,7,18,경기도,
+001011,군포시,003,Mining ＆ quarrying,2022,0,0,경기도,
+001011,군포시,004,Manufacturing,2022,3982,30060,경기도,IT장비/전산
+001011,군포시,005,Electricity gas steam and water supply,2022,10,131,경기도,시설유지보수
+001011,군포시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,62,474,경기도,폐기물/환경
+001011,군포시,007,Construction,2022,1780,6879,경기도,건설/공사
+001011,군포시,008,Wholesale and retail trade,2022,6194,14611,경기도,사무용품/소모품
+001011,군포시,009,Transportation,2022,4073,11559,경기도,차량/운송
+001011,군포시,010,Accommodation and food service activities,2022,3150,8975,경기도,
+001011,군포시,011,Information and communications,2022,693,1849,경기도,IT장비/전산
+001011,군포시,012,Financial and insurance activities,2022,114,813,경기도,
+001011,군포시,013,Real estate activites and renting and leasing,2022,1456,3168,경기도,
+001011,군포시,014,Professional scientific and technical activities,2022,1019,5248,경기도,전문용역/컨설팅
+001011,군포시,015,Business facilities managementand business support services,2022,613,7824,경기도,시설유지보수
+001011,군포시,016,Public administration ; compulsory social security,2022,32,2049,경기도,
+001011,군포시,017,Education,2022,1392,8076,경기도,교육물품/교구
+001011,군포시,018,Human health and social work activities,2022,824,11053,경기도,의료/복지용품
+001011,군포시,019,Arts sports and recreation related services,2022,712,2150,경기도,
+001011,군포시,020,Membership organizations repair and other personal services,2022,2104,4214,경기도,
+001012,의왕시,002,Agriculture forestry and fishing,2022,10,20,경기도,
+001012,의왕시,003,Mining ＆ quarrying,2022,0,0,경기도,
+001012,의왕시,004,Manufacturing,2022,1414,10162,경기도,IT장비/전산
+001012,의왕시,005,Electricity gas steam and water supply,2022,17,49,경기도,시설유지보수
+001012,의왕시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,41,326,경기도,폐기물/환경
+001012,의왕시,007,Construction,2022,713,3573,경기도,건설/공사
+001012,의왕시,008,Wholesale and retail trade,2022,3546,9270,경기도,사무용품/소모품
+001012,의왕시,009,Transportation,2022,2065,4970,경기도,차량/운송
+001012,의왕시,010,Accommodation and food service activities,2022,1485,4829,경기도,
+001012,의왕시,011,Information and communications,2022,430,2765,경기도,IT장비/전산
+001012,의왕시,012,Financial and insurance activities,2022,69,376,경기도,
+001012,의왕시,013,Real estate activites and renting and leasing,2022,765,1737,경기도,
+001012,의왕시,014,Professional scientific and technical activities,2022,652,6736,경기도,전문용역/컨설팅
+001012,의왕시,015,Business facilities managementand business support services,2022,254,2266,경기도,시설유지보수
+001012,의왕시,016,Public administration ; compulsory social security,2022,29,2492,경기도,
+001012,의왕시,017,Education,2022,689,3751,경기도,교육물품/교구
+001012,의왕시,018,Human health and social work activities,2022,433,5308,경기도,의료/복지용품
+001012,의왕시,019,Arts sports and recreation related services,2022,363,936,경기도,
+001012,의왕시,020,Membership organizations repair and other personal services,2022,1008,1979,경기도,
+001013,하남시,002,Agriculture forestry and fishing,2022,14,61,경기도,
+001013,하남시,003,Mining ＆ quarrying,2022,0,0,경기도,
+001013,하남시,004,Manufacturing,2022,2882,12331,경기도,IT장비/전산
+001013,하남시,005,Electricity gas steam and water supply,2022,41,373,경기도,시설유지보수
+001013,하남시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,54,574,경기도,폐기물/환경
+001013,하남시,007,Construction,2022,1894,8791,경기도,건설/공사
+001013,하남시,008,Wholesale and retail trade,2022,11320,32980,경기도,사무용품/소모품
+001013,하남시,009,Transportation,2022,2925,5836,경기도,차량/운송
+001013,하남시,010,Accommodation and food service activities,2022,3365,10445,경기도,
+001013,하남시,011,Information and communications,2022,1244,3720,경기도,IT장비/전산
+001013,하남시,012,Financial and insurance activities,2022,160,953,경기도,
+001013,하남시,013,Real estate activites and renting and leasing,2022,2637,5100,경기도,
+001013,하남시,014,Professional scientific and technical activities,2022,1704,5159,경기도,전문용역/컨설팅
+001013,하남시,015,Business facilities managementand business support services,2022,815,4578,경기도,시설유지보수
+001013,하남시,016,Public administration ; compulsory social security,2022,37,2673,경기도,
+001013,하남시,017,Education,2022,1532,7618,경기도,교육물품/교구
+001013,하남시,018,Human health and social work activities,2022,906,9764,경기도,의료/복지용품
+001013,하남시,019,Arts sports and recreation related services,2022,743,2335,경기도,
+001013,하남시,020,Membership organizations repair and other personal services,2022,2183,4240,경기도,
+001014,용인시,002,Agriculture forestry and fishing,2022,133,550,경기도,
+001014,용인시,003,Mining ＆ quarrying,2022,13,251,경기도,
+001014,용인시,004,Manufacturing,2022,6915,61621,경기도,IT장비/전산
+001014,용인시,005,Electricity gas steam and water supply,2022,152,421,경기도,시설유지보수
+001014,용인시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,170,2336,경기도,폐기물/환경
+001014,용인시,007,Construction,2022,7096,29006,경기도,건설/공사
+001014,용인시,008,Wholesale and retail trade,2022,25741,63001,경기도,사무용품/소모품
+001014,용인시,009,Transportation,2022,12456,27488,경기도,차량/운송
+001014,용인시,010,Accommodation and food service activities,2022,10693,33270,경기도,
+001014,용인시,011,Information and communications,2022,3222,10929,경기도,IT장비/전산
+001014,용인시,012,Financial and insurance activities,2022,553,4210,경기도,
+001014,용인시,013,Real estate activites and renting and leasing,2022,7752,17015,경기도,
+001014,용인시,014,Professional scientific and technical activities,2022,5021,44526,경기도,전문용역/컨설팅
+001014,용인시,015,Business facilities managementand business support services,2022,2321,17607,경기도,시설유지보수
+001014,용인시,016,Public administration ; compulsory social security,2022,109,6834,경기도,
+001014,용인시,017,Education,2022,5854,38847,경기도,교육물품/교구
+001014,용인시,018,Human health and social work activities,2022,2718,36515,경기도,의료/복지용품
+001014,용인시,019,Arts sports and recreation related services,2022,2470,11894,경기도,
+001014,용인시,020,Membership organizations repair and other personal services,2022,6842,14118,경기도,
+001015,이천시,002,Agriculture forestry and fishing,2022,126,879,경기도,
+001015,이천시,003,Mining ＆ quarrying,2022,2,26,경기도,
+001015,이천시,004,Manufacturing,2022,2750,46896,경기도,IT장비/전산
+001015,이천시,005,Electricity gas steam and water supply,2022,488,576,경기도,시설유지보수
+001015,이천시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,87,939,경기도,폐기물/환경
+001015,이천시,007,Construction,2022,3502,10158,경기도,건설/공사
+001015,이천시,008,Wholesale and retail trade,2022,5916,15074,경기도,사무용품/소모품
+001015,이천시,009,Transportation,2022,5118,14569,경기도,차량/운송
+001015,이천시,010,Accommodation and food service activities,2022,3775,10281,경기도,
+001015,이천시,011,Information and communications,2022,175,734,경기도,IT장비/전산
+001015,이천시,012,Financial and insurance activities,2022,188,1888,경기도,
+001015,이천시,013,Real estate activites and renting and leasing,2022,1450,2599,경기도,
+001015,이천시,014,Professional scientific and technical activities,2022,576,3424,경기도,전문용역/컨설팅
+001015,이천시,015,Business facilities managementand business support services,2022,761,9318,경기도,시설유지보수
+001015,이천시,016,Public administration ; compulsory social security,2022,68,2829,경기도,
+001015,이천시,017,Education,2022,1016,7071,경기도,교육물품/교구
+001015,이천시,018,Human health and social work activities,2022,622,8501,경기도,의료/복지용품
+001015,이천시,019,Arts sports and recreation related services,2022,629,3121,경기도,
+001015,이천시,020,Membership organizations repair and other personal services,2022,2173,3661,경기도,
+001016,안성시,002,Agriculture forestry and fishing,2022,165,987,경기도,
+001016,안성시,003,Mining ＆ quarrying,2022,7,41,경기도,
+001016,안성시,004,Manufacturing,2022,3912,43085,경기도,IT장비/전산
+001016,안성시,005,Electricity gas steam and water supply,2022,730,906,경기도,시설유지보수
+001016,안성시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,132,786,경기도,폐기물/환경
+001016,안성시,007,Construction,2022,1923,6082,경기도,건설/공사
+001016,안성시,008,Wholesale and retail trade,2022,5670,13744,경기도,사무용품/소모품
+001016,안성시,009,Transportation,2022,4263,8131,경기도,차량/운송
+001016,안성시,010,Accommodation and food service activities,2022,3479,8445,경기도,
+001016,안성시,011,Information and communications,2022,156,444,경기도,IT장비/전산
+001016,안성시,012,Financial and insurance activities,2022,125,1422,경기도,
+001016,안성시,013,Real estate activites and renting and leasing,2022,1087,1862,경기도,
+001016,안성시,014,Professional scientific and technical activities,2022,542,2524,경기도,전문용역/컨설팅
+001016,안성시,015,Business facilities managementand business support services,2022,647,5152,경기도,시설유지보수
+001016,안성시,016,Public administration ; compulsory social security,2022,58,2408,경기도,
+001016,안성시,017,Education,2022,849,7188,경기도,교육물품/교구
+001016,안성시,018,Human health and social work activities,2022,612,7499,경기도,의료/복지용품
+001016,안성시,019,Arts sports and recreation related services,2022,573,2611,경기도,
+001016,안성시,020,Membership organizations repair and other personal services,2022,1897,3680,경기도,
+001017,김포시,002,Agriculture forestry and fishing,2022,81,312,경기도,
+001017,김포시,003,Mining ＆ quarrying,2022,5,37,경기도,
+001017,김포시,004,Manufacturing,2022,13945,81327,경기도,IT장비/전산
+001017,김포시,005,Electricity gas steam and water supply,2022,321,549,경기도,시설유지보수
+001017,김포시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,211,1279,경기도,폐기물/환경
+001017,김포시,007,Construction,2022,3379,9371,경기도,건설/공사
+001017,김포시,008,Wholesale and retail trade,2022,16117,34698,경기도,사무용품/소모품
+001017,김포시,009,Transportation,2022,5567,12450,경기도,차량/운송
+001017,김포시,010,Accommodation and food service activities,2022,5939,16078,경기도,
+001017,김포시,011,Information and communications,2022,1654,3102,경기도,IT장비/전산
+001017,김포시,012,Financial and insurance activities,2022,300,2145,경기도,
+001017,김포시,013,Real estate activites and renting and leasing,2022,4091,7697,경기도,
+001017,김포시,014,Professional scientific and technical activities,2022,2290,5127,경기도,전문용역/컨설팅
+001017,김포시,015,Business facilities managementand business support services,2022,1300,3764,경기도,시설유지보수
+001017,김포시,016,Public administration ; compulsory social security,2022,54,3217,경기도,
+001017,김포시,017,Education,2022,2797,14116,경기도,교육물품/교구
+001017,김포시,018,Human health and social work activities,2022,1349,16162,경기도,의료/복지용품
+001017,김포시,019,Arts sports and recreation related services,2022,1238,3025,경기도,
+001017,김포시,020,Membership organizations repair and other personal services,2022,3593,6883,경기도,
+001019,화성시,002,Agriculture forestry and fishing,2022,162,599,경기도,
+001019,화성시,003,Mining ＆ quarrying,2022,13,158,경기도,
+001019,화성시,004,Manufacturing,2022,28590,268035,경기도,IT장비/전산
+001019,화성시,005,Electricity gas steam and water supply,2022,657,972,경기도,시설유지보수
+001019,화성시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,516,3871,경기도,폐기물/환경
+001019,화성시,007,Construction,2022,7130,30829,경기도,건설/공사
+001019,화성시,008,Wholesale and retail trade,2022,25599,59039,경기도,사무용품/소모품
+001019,화성시,009,Transportation,2022,8996,23099,경기도,차량/운송
+001019,화성시,010,Accommodation and food service activities,2022,11953,32608,경기도,
+001019,화성시,011,Information and communications,2022,2051,5145,경기도,IT장비/전산
+001019,화성시,012,Financial and insurance activities,2022,480,3804,경기도,
+001019,화성시,013,Real estate activites and renting and leasing,2022,7607,15209,경기도,
+001019,화성시,014,Professional scientific and technical activities,2022,3870,49232,경기도,전문용역/컨설팅
+001019,화성시,015,Business facilities managementand business support services,2022,2532,18543,경기도,시설유지보수
+001019,화성시,016,Public administration ; compulsory social security,2022,88,5905,경기도,
+001019,화성시,017,Education,2022,5395,29273,경기도,교육물품/교구
+001019,화성시,018,Human health and social work activities,2022,2367,26320,경기도,의료/복지용품
+001019,화성시,019,Arts sports and recreation related services,2022,2210,6469,경기도,
+001019,화성시,020,Membership organizations repair and other personal services,2022,6239,11532,경기도,
+001021,광주시,002,Agriculture forestry and fishing,2022,58,278,경기도,
+001021,광주시,003,Mining ＆ quarrying,2022,5,62,경기도,
+001021,광주시,004,Manufacturing,2022,8591,47415,경기도,IT장비/전산
+001021,광주시,005,Electricity gas steam and water supply,2022,155,291,경기도,시설유지보수
+001021,광주시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,82,811,경기도,폐기물/환경
+001021,광주시,007,Construction,2022,4301,11832,경기도,건설/공사
+001021,광주시,008,Wholesale and retail trade,2022,12426,30551,경기도,사무용품/소모품
+001021,광주시,009,Transportation,2022,6280,13148,경기도,차량/운송
+001021,광주시,010,Accommodation and food service activities,2022,4501,11790,경기도,
+001021,광주시,011,Information and communications,2022,581,1073,경기도,IT장비/전산
+001021,광주시,012,Financial and insurance activities,2022,155,1509,경기도,
+001021,광주시,013,Real estate activites and renting and leasing,2022,2673,4200,경기도,
+001021,광주시,014,Professional scientific and technical activities,2022,1276,3688,경기도,전문용역/컨설팅
+001021,광주시,015,Business facilities managementand business support services,2022,1135,3009,경기도,시설유지보수
+001021,광주시,016,Public administration ; compulsory social security,2022,47,3090,경기도,
+001021,광주시,017,Education,2022,1476,8317,경기도,교육물품/교구
+001021,광주시,018,Human health and social work activities,2022,937,11938,경기도,의료/복지용품
+001021,광주시,019,Arts sports and recreation related services,2022,990,3185,경기도,
+001021,광주시,020,Membership organizations repair and other personal services,2022,3057,5678,경기도,
+001023,양평군,002,Agriculture forestry and fishing,2022,82,298,경기도,
+001023,양평군,003,Mining ＆ quarrying,2022,1,1,경기도,
+001023,양평군,004,Manufacturing,2022,741,2293,경기도,IT장비/전산
+001023,양평군,005,Electricity gas steam and water supply,2022,264,332,경기도,시설유지보수
+001023,양평군,006,Sewerage waste managementmaterials recovery and remediation activities,2022,37,286,경기도,폐기물/환경
+001023,양평군,007,Construction,2022,1886,4774,경기도,건설/공사
+001023,양평군,008,Wholesale and retail trade,2022,2816,5628,경기도,사무용품/소모품
+001023,양평군,009,Transportation,2022,831,1572,경기도,차량/운송
+001023,양평군,010,Accommodation and food service activities,2022,2654,5961,경기도,
+001023,양평군,011,Information and communications,2022,250,521,경기도,IT장비/전산
+001023,양평군,012,Financial and insurance activities,2022,70,689,경기도,
+001023,양평군,013,Real estate activites and renting and leasing,2022,1076,1539,경기도,
+001023,양평군,014,Professional scientific and technical activities,2022,466,1124,경기도,전문용역/컨설팅
+001023,양평군,015,Business facilities managementand business support services,2022,227,541,경기도,시설유지보수
+001023,양평군,016,Public administration ; compulsory social security,2022,48,2200,경기도,
+001023,양평군,017,Education,2022,577,3280,경기도,교육물품/교구
+001023,양평군,018,Human health and social work activities,2022,382,5099,경기도,의료/복지용품
+001023,양평군,019,Arts sports and recreation related services,2022,404,1054,경기도,
+001023,양평군,020,Membership organizations repair and other personal services,2022,1071,1813,경기도,
+001024,의정부시,002,Agriculture forestry and fishing,2022,1,38,경기도,
+001024,의정부시,003,Mining ＆ quarrying,2022,1,47,경기도,
+001024,의정부시,004,Manufacturing,2022,1851,6091,경기도,IT장비/전산
+001024,의정부시,005,Electricity gas steam and water supply,2022,19,696,경기도,시설유지보수
+001024,의정부시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,68,650,경기도,폐기물/환경
+001024,의정부시,007,Construction,2022,4172,9113,경기도,건설/공사
+001024,의정부시,008,Wholesale and retail trade,2022,10952,23231,경기도,사무용품/소모품
+001024,의정부시,009,Transportation,2022,4614,8188,경기도,차량/운송
+001024,의정부시,010,Accommodation and food service activities,2022,5886,15602,경기도,
+001024,의정부시,011,Information and communications,2022,574,1931,경기도,IT장비/전산
+001024,의정부시,012,Financial and insurance activities,2022,490,4762,경기도,
+001024,의정부시,013,Real estate activites and renting and leasing,2022,1820,4310,경기도,
+001024,의정부시,014,Professional scientific and technical activities,2022,1400,5138,경기도,전문용역/컨설팅
+001024,의정부시,015,Business facilities managementand business support services,2022,906,6246,경기도,시설유지보수
+001024,의정부시,016,Public administration ; compulsory social security,2022,63,6986,경기도,
+001024,의정부시,017,Education,2022,2066,12862,경기도,교육물품/교구
+001024,의정부시,018,Human health and social work activities,2022,1484,22798,경기도,의료/복지용품
+001024,의정부시,019,Arts sports and recreation related services,2022,1159,2740,경기도,
+001024,의정부시,020,Membership organizations repair and other personal services,2022,3877,6773,경기도,
+001025,동두천시,002,Agriculture forestry and fishing,2022,6,32,경기도,
+001025,동두천시,003,Mining ＆ quarrying,2022,0,0,경기도,
+001025,동두천시,004,Manufacturing,2022,620,4993,경기도,IT장비/전산
+001025,동두천시,005,Electricity gas steam and water supply,2022,24,200,경기도,시설유지보수
+001025,동두천시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,48,434,경기도,폐기물/환경
+001025,동두천시,007,Construction,2022,633,1805,경기도,건설/공사
+001025,동두천시,008,Wholesale and retail trade,2022,2226,4127,경기도,사무용품/소모품
+001025,동두천시,009,Transportation,2022,1006,1787,경기도,차량/운송
+001025,동두천시,010,Accommodation and food service activities,2022,1639,3870,경기도,
+001025,동두천시,011,Information and communications,2022,66,233,경기도,IT장비/전산
+001025,동두천시,012,Financial and insurance activities,2022,69,747,경기도,
+001025,동두천시,013,Real estate activites and renting and leasing,2022,451,866,경기도,
+001025,동두천시,014,Professional scientific and technical activities,2022,160,347,경기도,전문용역/컨설팅
+001025,동두천시,015,Business facilities managementand business support services,2022,186,529,경기도,시설유지보수
+001025,동두천시,016,Public administration ; compulsory social security,2022,31,1501,경기도,
+001025,동두천시,017,Education,2022,326,2376,경기도,교육물품/교구
+001025,동두천시,018,Human health and social work activities,2022,335,5135,경기도,의료/복지용품
+001025,동두천시,019,Arts sports and recreation related services,2022,223,669,경기도,
+001025,동두천시,020,Membership organizations repair and other personal services,2022,1028,1613,경기도,
+001026,고양시,002,Agriculture forestry and fishing,2022,64,307,경기도,
+001026,고양시,003,Mining ＆ quarrying,2022,1,18,경기도,
+001026,고양시,004,Manufacturing,2022,8211,33161,경기도,IT장비/전산
+001026,고양시,005,Electricity gas steam and water supply,2022,172,813,경기도,시설유지보수
+001026,고양시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,204,2363,경기도,폐기물/환경
+001026,고양시,007,Construction,2022,8066,27910,경기도,건설/공사
+001026,고양시,008,Wholesale and retail trade,2022,32919,75028,경기도,사무용품/소모품
+001026,고양시,009,Transportation,2022,10786,25580,경기도,차량/운송
+001026,고양시,010,Accommodation and food service activities,2022,12120,35899,경기도,
+001026,고양시,011,Information and communications,2022,3876,11200,경기도,IT장비/전산
+001026,고양시,012,Financial and insurance activities,2022,909,7957,경기도,
+001026,고양시,013,Real estate activites and renting and leasing,2022,5432,13780,경기도,
+001026,고양시,014,Professional scientific and technical activities,2022,4651,15394,경기도,전문용역/컨설팅
+001026,고양시,015,Business facilities managementand business support services,2022,2830,16187,경기도,시설유지보수
+001026,고양시,016,Public administration ; compulsory social security,2022,113,8309,경기도,
+001026,고양시,017,Education,2022,6050,31794,경기도,교육물품/교구
+001026,고양시,018,Human health and social work activities,2022,3055,48335,경기도,의료/복지용품
+001026,고양시,019,Arts sports and recreation related services,2022,3065,9117,경기도,
+001026,고양시,020,Membership organizations repair and other personal services,2022,8877,17619,경기도,
+001027,구리시,002,Agriculture forestry and fishing,2022,7,16,경기도,
+001027,구리시,003,Mining ＆ quarrying,2022,0,0,경기도,
+001027,구리시,004,Manufacturing,2022,1092,3640,경기도,IT장비/전산
+001027,구리시,005,Electricity gas steam and water supply,2022,8,75,경기도,시설유지보수
+001027,구리시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,28,340,경기도,폐기물/환경
+001027,구리시,007,Construction,2022,1897,4385,경기도,건설/공사
+001027,구리시,008,Wholesale and retail trade,2022,6076,14160,경기도,사무용품/소모품
+001027,구리시,009,Transportation,2022,2452,4452,경기도,차량/운송
+001027,구리시,010,Accommodation and food service activities,2022,2566,6448,경기도,
+001027,구리시,011,Information and communications,2022,527,984,경기도,IT장비/전산
+001027,구리시,012,Financial and insurance activities,2022,208,2273,경기도,
+001027,구리시,013,Real estate activites and renting and leasing,2022,921,2002,경기도,
+001027,구리시,014,Professional scientific and technical activities,2022,1171,2795,경기도,전문용역/컨설팅
+001027,구리시,015,Business facilities managementand business support services,2022,496,3999,경기도,시설유지보수
+001027,구리시,016,Public administration ; compulsory social security,2022,29,2286,경기도,
+001027,구리시,017,Education,2022,1035,4971,경기도,교육물품/교구
+001027,구리시,018,Human health and social work activities,2022,647,9362,경기도,의료/복지용품
+001027,구리시,019,Arts sports and recreation related services,2022,515,1354,경기도,
+001027,구리시,020,Membership organizations repair and other personal services,2022,1760,3315,경기도,
+001028,남양주시,002,Agriculture forestry and fishing,2022,41,136,경기도,
+001028,남양주시,003,Mining ＆ quarrying,2022,3,6,경기도,
+001028,남양주시,004,Manufacturing,2022,8040,36130,경기도,IT장비/전산
+001028,남양주시,005,Electricity gas steam and water supply,2022,84,393,경기도,시설유지보수
+001028,남양주시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,112,1221,경기도,폐기물/환경
+001028,남양주시,007,Construction,2022,4956,16827,경기도,건설/공사
+001028,남양주시,008,Wholesale and retail trade,2022,20062,46579,경기도,사무용품/소모품
+001028,남양주시,009,Transportation,2022,5989,11495,경기도,차량/운송
+001028,남양주시,010,Accommodation and food service activities,2022,7807,21497,경기도,
+001028,남양주시,011,Information and communications,2022,1246,2718,경기도,IT장비/전산
+001028,남양주시,012,Financial and insurance activities,2022,269,2428,경기도,
+001028,남양주시,013,Real estate activites and renting and leasing,2022,3728,7754,경기도,
+001028,남양주시,014,Professional scientific and technical activities,2022,2185,5166,경기도,전문용역/컨설팅
+001028,남양주시,015,Business facilities managementand business support services,2022,1588,4574,경기도,시설유지보수
+001028,남양주시,016,Public administration ; compulsory social security,2022,66,5352,경기도,
+001028,남양주시,017,Education,2022,3449,18679,경기도,교육물품/교구
+001028,남양주시,018,Human health and social work activities,2022,1987,24045,경기도,의료/복지용품
+001028,남양주시,019,Arts sports and recreation related services,2022,1528,4107,경기도,
+001028,남양주시,020,Membership organizations repair and other personal services,2022,5132,8521,경기도,
+001029,파주시,002,Agriculture forestry and fishing,2022,99,386,경기도,
+001029,파주시,003,Mining ＆ quarrying,2022,4,50,경기도,
+001029,파주시,004,Manufacturing,2022,8567,83177,경기도,IT장비/전산
+001029,파주시,005,Electricity gas steam and water supply,2022,341,606,경기도,시설유지보수
+001029,파주시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,139,1447,경기도,폐기물/환경
+001029,파주시,007,Construction,2022,5274,12972,경기도,건설/공사
+001029,파주시,008,Wholesale and retail trade,2022,14132,31697,경기도,사무용품/소모품
+001029,파주시,009,Transportation,2022,6611,15446,경기도,차량/운송
+001029,파주시,010,Accommodation and food service activities,2022,6784,17534,경기도,
+001029,파주시,011,Information and communications,2022,1547,5597,경기도,IT장비/전산
+001029,파주시,012,Financial and insurance activities,2022,257,2114,경기도,
+001029,파주시,013,Real estate activites and renting and leasing,2022,3793,6853,경기도,
+001029,파주시,014,Professional scientific and technical activities,2022,1803,4116,경기도,전문용역/컨설팅
+001029,파주시,015,Business facilities managementand business support services,2022,1326,6220,경기도,시설유지보수
+001029,파주시,016,Public administration ; compulsory social security,2022,71,3092,경기도,
+001029,파주시,017,Education,2022,2264,13301,경기도,교육물품/교구
+001029,파주시,018,Human health and social work activities,2022,1323,16969,경기도,의료/복지용품
+001029,파주시,019,Arts sports and recreation related services,2022,1404,4886,경기도,
+001029,파주시,020,Membership organizations repair and other personal services,2022,3814,7015,경기도,
+001031,양주시,002,Agriculture forestry and fishing,2022,39,106,경기도,
+001031,양주시,003,Mining ＆ quarrying,2022,4,132,경기도,
+001031,양주시,004,Manufacturing,2022,5475,31945,경기도,IT장비/전산
+001031,양주시,005,Electricity gas steam and water supply,2022,123,247,경기도,시설유지보수
+001031,양주시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,117,1222,경기도,폐기물/환경
+001031,양주시,007,Construction,2022,2473,7034,경기도,건설/공사
+001031,양주시,008,Wholesale and retail trade,2022,7292,16065,경기도,사무용품/소모품
+001031,양주시,009,Transportation,2022,2752,5523,경기도,차량/운송
+001031,양주시,010,Accommodation and food service activities,2022,3463,8760,경기도,
+001031,양주시,011,Information and communications,2022,242,466,경기도,IT장비/전산
+001031,양주시,012,Financial and insurance activities,2022,90,712,경기도,
+001031,양주시,013,Real estate activites and renting and leasing,2022,1501,2743,경기도,
+001031,양주시,014,Professional scientific and technical activities,2022,568,1585,경기도,전문용역/컨설팅
+001031,양주시,015,Business facilities managementand business support services,2022,622,2150,경기도,시설유지보수
+001031,양주시,016,Public administration ; compulsory social security,2022,43,2575,경기도,
+001031,양주시,017,Education,2022,979,6795,경기도,교육물품/교구
+001031,양주시,018,Human health and social work activities,2022,738,10798,경기도,의료/복지용품
+001031,양주시,019,Arts sports and recreation related services,2022,630,1720,경기도,
+001031,양주시,020,Membership organizations repair and other personal services,2022,2095,3555,경기도,
+001033,포천시,002,Agriculture forestry and fishing,2022,104,472,경기도,
+001033,포천시,003,Mining ＆ quarrying,2022,16,423,경기도,
+001033,포천시,004,Manufacturing,2022,8089,45969,경기도,IT장비/전산
+001033,포천시,005,Electricity gas steam and water supply,2022,239,602,경기도,시설유지보수
+001033,포천시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,151,952,경기도,폐기물/환경
+001033,포천시,007,Construction,2022,2214,5328,경기도,건설/공사
+001033,포천시,008,Wholesale and retail trade,2022,5585,13507,경기도,사무용품/소모품
+001033,포천시,009,Transportation,2022,2507,4383,경기도,차량/운송
+001033,포천시,010,Accommodation and food service activities,2022,3633,8120,경기도,
+001033,포천시,011,Information and communications,2022,100,319,경기도,IT장비/전산
+001033,포천시,012,Financial and insurance activities,2022,115,1368,경기도,
+001033,포천시,013,Real estate activites and renting and leasing,2022,846,1342,경기도,
+001033,포천시,014,Professional scientific and technical activities,2022,400,1528,경기도,전문용역/컨설팅
+001033,포천시,015,Business facilities managementand business support services,2022,518,1432,경기도,시설유지보수
+001033,포천시,016,Public administration ; compulsory social security,2022,70,2651,경기도,
+001033,포천시,017,Education,2022,445,4846,경기도,교육물품/교구
+001033,포천시,018,Human health and social work activities,2022,488,6417,경기도,의료/복지용품
+001033,포천시,019,Arts sports and recreation related services,2022,482,2808,경기도,
+001033,포천시,020,Membership organizations repair and other personal services,2022,1549,2839,경기도,
+001034,연천군,002,Agriculture forestry and fishing,2022,54,227,경기도,
+001034,연천군,003,Mining ＆ quarrying,2022,4,55,경기도,
+001034,연천군,004,Manufacturing,2022,491,2836,경기도,IT장비/전산
+001034,연천군,005,Electricity gas steam and water supply,2022,402,467,경기도,시설유지보수
+001034,연천군,006,Sewerage waste managementmaterials recovery and remediation activities,2022,48,479,경기도,폐기물/환경
+001034,연천군,007,Construction,2022,537,2011,경기도,건설/공사
+001034,연천군,008,Wholesale and retail trade,2022,1045,1960,경기도,사무용품/소모품
+001034,연천군,009,Transportation,2022,4128,4571,경기도,차량/운송
+001034,연천군,010,Accommodation and food service activities,2022,1031,2062,경기도,
+001034,연천군,011,Information and communications,2022,31,137,경기도,IT장비/전산
+001034,연천군,012,Financial and insurance activities,2022,39,308,경기도,
+001034,연천군,013,Real estate activites and renting and leasing,2022,193,262,경기도,
+001034,연천군,014,Professional scientific and technical activities,2022,85,280,경기도,전문용역/컨설팅
+001034,연천군,015,Business facilities managementand business support services,2022,95,238,경기도,시설유지보수
+001034,연천군,016,Public administration ; compulsory social security,2022,36,1790,경기도,
+001034,연천군,017,Education,2022,130,1086,경기도,교육물품/교구
+001034,연천군,018,Human health and social work activities,2022,157,1999,경기도,의료/복지용품
+001034,연천군,019,Arts sports and recreation related services,2022,126,454,경기도,
+001034,연천군,020,Membership organizations repair and other personal services,2022,484,759,경기도,
+001035,가평군,002,Agriculture forestry and fishing,2022,28,165,경기도,
+001035,가평군,003,Mining ＆ quarrying,2022,3,106,경기도,
+001035,가평군,004,Manufacturing,2022,463,2050,경기도,IT장비/전산
+001035,가평군,005,Electricity gas steam and water supply,2022,200,360,경기도,시설유지보수
+001035,가평군,006,Sewerage waste managementmaterials recovery and remediation activities,2022,34,367,경기도,폐기물/환경
+001035,가평군,007,Construction,2022,1007,2895,경기도,건설/공사
+001035,가평군,008,Wholesale and retail trade,2022,1738,3510,경기도,사무용품/소모품
+001035,가평군,009,Transportation,2022,366,853,경기도,차량/운송
+001035,가평군,010,Accommodation and food service activities,2022,3465,8330,경기도,
+001035,가평군,011,Information and communications,2022,88,265,경기도,IT장비/전산
+001035,가평군,012,Financial and insurance activities,2022,46,449,경기도,
+001035,가평군,013,Real estate activites and renting and leasing,2022,383,659,경기도,
+001035,가평군,014,Professional scientific and technical activities,2022,218,648,경기도,전문용역/컨설팅
+001035,가평군,015,Business facilities managementand business support services,2022,146,579,경기도,시설유지보수
+001035,가평군,016,Public administration ; compulsory social security,2022,31,1777,경기도,
+001035,가평군,017,Education,2022,253,2004,경기도,교육물품/교구
+001035,가평군,018,Human health and social work activities,2022,218,2741,경기도,의료/복지용품
+001035,가평군,019,Arts sports and recreation related services,2022,338,2117,경기도,
+001035,가평군,020,Membership organizations repair and other personal services,2022,633,1525,경기도,
+001036,여주시,002,Agriculture forestry and fishing,2022,136,747,경기도,
+001036,여주시,003,Mining ＆ quarrying,2022,10,63,경기도,
+001036,여주시,004,Manufacturing,2022,1595,9344,경기도,IT장비/전산
+001036,여주시,005,Electricity gas steam and water supply,2022,492,582,경기도,시설유지보수
+001036,여주시,006,Sewerage waste managementmaterials recovery and remediation activities,2022,74,551,경기도,폐기물/환경
+001036,여주시,007,Construction,2022,1128,3892,경기도,건설/공사
+001036,여주시,008,Wholesale and retail trade,2022,3227,7554,경기도,사무용품/소모품
+001036,여주시,009,Transportation,2022,6244,9764,경기도,차량/운송
+001036,여주시,010,Accommodation and food service activities,2022,2127,5295,경기도,
+001036,여주시,011,Information and communications,2022,95,242,경기도,IT장비/전산
+001036,여주시,012,Financial and insurance activities,2022,79,677,경기도,
+001036,여주시,013,Real estate activites and renting and leasing,2022,590,1049,경기도,
+001036,여주시,014,Professional scientific and technical activities,2022,286,1352,경기도,전문용역/컨설팅
+001036,여주시,015,Business facilities managementand business support services,2022,347,2381,경기도,시설유지보수
+001036,여주시,016,Public administration ; compulsory social security,2022,59,2515,경기도,
+001036,여주시,017,Education,2022,409,3077,경기도,교육물품/교구
+001036,여주시,018,Human health and social work activities,2022,373,5396,경기도,의료/복지용품
+001036,여주시,019,Arts sports and recreation related services,2022,357,3172,경기도,
+001036,여주시,020,Membership organizations repair and other personal services,2022,1152,2293,경기도,
+001038,남부,002,Agriculture forestry and fishing,2022,1248,6357,경기도,
+001038,남부,003,Mining ＆ quarrying,2022,74,773,경기도,
+001038,남부,004,Manufacturing,2022,144455,1137635,경기도,IT장비/전산
+001038,남부,005,Electricity gas steam and water supply,2022,4147,10980,경기도,시설유지보수
+001038,남부,006,Sewerage waste managementmaterials recovery and remediation activities,2022,2688,25415,경기도,폐기물/환경
+001038,남부,007,Construction,2022,84590,314167,경기도,건설/공사
+001038,남부,008,Wholesale and retail trade,2022,274975,662171,경기도,사무용품/소모품
+001038,남부,009,Transportation,2022,127046,258084,경기도,차량/운송
+001038,남부,010,Accommodation and food service activities,2022,133782,370674,경기도,
+001038,남부,011,Information and communications,2022,26027,160475,경기도,IT장비/전산
+001038,남부,012,Financial and insurance activities,2022,7654,80966,경기도,
+001038,남부,013,Real estate activites and renting and leasing,2022,64254,141941,경기도,
+001038,남부,014,Professional scientific and technical activities,2022,42811,324938,경기도,전문용역/컨설팅
+001038,남부,015,Business facilities managementand business support services,2022,26340,230636,경기도,시설유지보수
+001038,남부,016,Public administration ; compulsory social security,2022,1401,111727,경기도,
+001038,남부,017,Education,2022,50457,309923,경기도,교육물품/교구
+001038,남부,018,Human health and social work activities,2022,29127,387335,경기도,의료/복지용품
+001038,남부,019,Arts sports and recreation related services,2022,27131,85420,경기도,
+001038,남부,020,Membership organizations repair and other personal services,2022,80032,152576,경기도,
+001039,북부,002,Agriculture forestry and fishing,2022,443,1885,경기도,
+001039,북부,003,Mining ＆ quarrying,2022,36,837,경기도,
+001039,북부,004,Manufacturing,2022,42899,249992,경기도,IT장비/전산
+001039,북부,005,Electricity gas steam and water supply,2022,1612,4459,경기도,시설유지보수
+001039,북부,006,Sewerage waste managementmaterials recovery and remediation activities,2022,949,9475,경기도,폐기물/환경
+001039,북부,007,Construction,2022,31229,90280,경기도,건설/공사
+001039,북부,008,Wholesale and retail trade,2022,102027,229864,경기도,사무용품/소모품
+001039,북부,009,Transportation,2022,41211,82278,경기도,차량/운송
+001039,북부,010,Accommodation and food service activities,2022,48394,128122,경기도,
+001039,북부,011,Information and communications,2022,8297,23850,경기도,IT장비/전산
+001039,북부,012,Financial and insurance activities,2022,2492,23118,경기도,
+001039,북부,013,Real estate activites and renting and leasing,2022,19068,40571,경기도,
+001039,북부,014,Professional scientific and technical activities,2022,12641,36997,경기도,전문용역/컨설팅
+001039,북부,015,Business facilities managementand business support services,2022,8713,42154,경기도,시설유지보수
+001039,북부,016,Public administration ; compulsory social security,2022,553,36319,경기도,
+001039,북부,017,Education,2022,16997,98714,경기도,교육물품/교구
+001039,북부,018,Human health and social work activities,2022,10432,148599,경기도,의료/복지용품
+001039,북부,019,Arts sports and recreation related services,2022,9470,29972,경기도,
+001039,북부,020,Membership organizations repair and other personal services,2022,29249,53534,경기도,
