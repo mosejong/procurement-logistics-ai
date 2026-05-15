@@ -19,6 +19,14 @@ from src.config.regions import ALL_DISTRICT_NAMES, DISTRICT_CITY_MAP, REGIONS
 # 전국 구/시/군 목록 (regions.py에서 가져옴)
 ALL_DISTRICTS: list[str] = sorted(ALL_DISTRICT_NAMES, key=len, reverse=True)
 
+# 3글자 이상 지역명의 접두어 매핑 (예: "해운대구" → {"해운대": "해운대구"})
+# 2글자 이하 접두어("남", "동" 등)는 오매칭이 많아 제외합니다.
+DISTRICT_PREFIX_MAP: dict[str, str] = {
+    d[:-1]: d
+    for d in ALL_DISTRICT_NAMES
+    if len(d) >= 3 and d[-1] in ("구", "군", "시")
+}
+
 # 서울 외 지역까지 기본 지역명으로 추출할 때 쓰는 목록입니다.
 REGION_KEYWORDS = [
     "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종",
@@ -106,6 +114,10 @@ def _extract_district(row: pd.Series) -> str:
     for district in ALL_DISTRICTS:
         if district in text:
             return district
+    # 2차: "해운대교육청"처럼 구/군/시 접미어 없이 들어온 경우 접두어로 매칭
+    for prefix, district in DISTRICT_PREFIX_MAP.items():
+        if prefix in text:
+            return district
     return "미상"
 
 
@@ -187,6 +199,10 @@ def clean_bid_data(df: pd.DataFrame) -> pd.DataFrame:
     if "_source_city" in df.columns:
         tagged_city = df["_source_city"].notna() & (df["_source_city"].astype(str).str.strip() != "")
         df.loc[tagged_city, "city"] = df.loc[tagged_city, "_source_city"]
+
+    # district가 미상이지만 city가 확정된 행 → city명을 district로 사용 (시 단위 집계용)
+    city_known = (df["district"] == "미상") & (df["city"] != "미상")
+    df.loc[city_known, "district"] = df.loc[city_known, "city"]
 
     # region 컬럼을 city 기반으로 보정합니다.
     df.loc[df["city"] != "미상", "region"] = df.loc[df["city"] != "미상", "city"]
