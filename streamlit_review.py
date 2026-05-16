@@ -5,7 +5,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 import os
 import signal
 
+import json
+
 import pandas as pd
+import plotly.express as px
 import streamlit as st
 
 from src.config.regions import CITY_LABELS, REGIONS
@@ -38,6 +41,39 @@ HEATMAP_PATH = FIGURES_DIR / "seoul_opportunity_heatmap.png"
 REPORT_PATH = REPORTS_DIR / "national_summary.md"
 if not REPORT_PATH.exists():
     REPORT_PATH = REPORTS_DIR / "seoul_sample_summary.md"
+
+
+KOREA_GEOJSON_PATH = ROOT / "data" / "reference" / "korea_sido.geojson"
+
+# GeoJSON city 명칭 → 데이터 city 컬럼 역방향 매핑 (불일치 보정)
+_GEO_TO_DATA_CITY: dict[str, str] = {
+    "전라북도": "전라북도",  # opportunity_matrix 기준
+}
+
+
+@st.cache_data
+def load_korea_geojson() -> dict:
+    if not KOREA_GEOJSON_PATH.exists():
+        return {}
+    with open(KOREA_GEOJSON_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@st.cache_data
+def get_sido_summary(df: pd.DataFrame) -> pd.DataFrame:
+    """시/도별 opportunity_score 평균·bid_count 합계 집계"""
+    if df.empty or "city" not in df.columns:
+        return pd.DataFrame()
+    return (
+        df.groupby("city")
+        .agg(
+            opportunity_score=("opportunity_score", "mean"),
+            bid_count=("bid_count", "sum"),
+            district_count=("district", "nunique"),
+        )
+        .round({"opportunity_score": 1})
+        .reset_index()
+    )
 
 
 def load_csv(path: Path) -> pd.DataFrame:
@@ -124,7 +160,7 @@ if features_all.empty:
 # ── 사이드바 네비게이션 ─────────────────────────────────────────────────────
 page = st.sidebar.radio(
     "화면 선택",
-    ["📋 프로젝트 개요", "🔍 사업 유형 검색", "🗺️ 지역 분석", "📦 품목 분석", "⚖️ 자치구 비교", "👥 소비층 적합도", "🏪 경쟁 분석", "🚚 물류 거점 분석", "📊 원천 데이터"],
+    ["🌏 전국 지도", "📋 프로젝트 개요", "🔍 사업 유형 검색", "🗺️ 지역 분석", "📦 품목 분석", "⚖️ 자치구 비교", "👥 소비층 적합도", "🏪 경쟁 분석", "🚚 물류 거점 분석", "📊 원천 데이터"],
 )
 
 # ── 시/도 필터 ──────────────────────────────────────────────────────────────
@@ -172,7 +208,94 @@ st.caption(
 )
 
 # ══════════════════════════════════════════════════════════════════════════════
-if page == "🔍 사업 유형 검색":
+if page == "🌏 전국 지도":
+    st.header("전국 공공수요 기회 지도")
+    st.caption("시/도 단위 공공조달 기회점수(opportunity_score) 평균을 choropleth로 시각화합니다.")
+
+    geojson = load_korea_geojson()
+    sido_df = get_sido_summary(matrix_all)
+
+    if geojson and not sido_df.empty:
+        col_left, col_right = st.columns([1, 3])
+
+        with col_left:
+            color_col = st.radio(
+                "색상 기준",
+                ["opportunity_score", "bid_count"],
+                format_func=lambda x: "기회점수(평균)" if x == "opportunity_score" else "공고 수(합계)",
+            )
+            st.divider()
+            st.dataframe(
+                sido_df[["city", color_col, "district_count"]]
+                .sort_values(color_col, ascending=False)
+                .rename(columns={
+                    "city": "시/도",
+                    "opportunity_score": "기회점수",
+                    "bid_count": "공고수",
+                    "district_count": "지역수",
+                }),
+                hide_index=True,
+                use_container_width=True,
+            )
+
+        with col_right:
+            color_label = "기회점수(평균)" if color_col == "opportunity_score" else "공고수(합계)"
+            fig = px.choropleth(
+                sido_df,
+                geojson=geojson,
+                locations="city",
+                featureidkey="properties.name",
+                color=color_col,
+                hover_data={
+                    "city": True,
+                    "opportunity_score": ":.1f",
+                    "bid_count": True,
+                    "district_count": True,
+                },
+                color_continuous_scale="Blues",
+                labels={
+                    "city": "시/도",
+                    "opportunity_score": "기회점수",
+                    "bid_count": "공고수",
+                    "district_count": "지역수",
+                },
+            )
+            fig.update_geos(
+                fitbounds="locations",
+                visible=False,
+                showframe=False,
+            )
+            fig.update_layout(
+                margin={"r": 0, "t": 0, "l": 0, "b": 0},
+                height=580,
+                coloraxis_colorbar=dict(
+                    title=color_label,
+                    thickness=14,
+                    len=0.7,
+                ),
+                paper_bgcolor="rgba(0,0,0,0)",
+                geo=dict(bgcolor="rgba(0,0,0,0)"),
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        # 매칭 진단 — GeoJSON name vs 데이터 city 불일치 확인
+        with st.expander("🔍 GeoJSON 매칭 진단"):
+            geo_names = {f["properties"]["name"] for f in geojson["features"]}
+            data_cities = set(sido_df["city"].unique())
+            unmatched_geo = geo_names - data_cities
+            unmatched_data = data_cities - geo_names
+            st.write(f"GeoJSON 시도 수: {len(geo_names)}, 데이터 시도 수: {len(data_cities)}")
+            if unmatched_geo:
+                st.warning(f"GeoJSON에만 있고 데이터에 없는 시도: {unmatched_geo}")
+            if unmatched_data:
+                st.warning(f"데이터에만 있고 GeoJSON에 없는 시도: {unmatched_data}")
+            if not unmatched_geo and not unmatched_data:
+                st.success("모든 시도 정상 매칭됨")
+    else:
+        st.info("opportunity_matrix_national.csv 또는 korea_sido.geojson 파일이 없습니다.")
+
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "🔍 사업 유형 검색":
     st.header("사업 유형으로 검색")
     st.caption("창업 아이템을 직접 입력하면, 공공조달 데이터에서 관련 수요 신호를 찾아드립니다.")
 
