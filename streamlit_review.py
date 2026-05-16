@@ -27,7 +27,7 @@ MATRIX_PATH = _find_table("opportunity_matrix_national.csv", "seoul_opportunity_
 TOP_ITEMS_PATH = _find_table("top_items_by_district_national.csv", "seoul_top_items_by_district.csv")
 FEATURE_PATH = TABLES_DIR / "feature_table_national.csv"
 COMPETITION_PATH = TABLES_DIR / "seoul_competition_matrix.csv"
-CONSUMER_FIT_PATH = TABLES_DIR / "seoul_consumer_fit.csv"
+CONSUMER_FIT_PATH = _find_table("national_consumer_fit.csv", "seoul_consumer_fit.csv")
 CLASSIFIED_PATH = PROCESSED_DIR / "bid_classified_national.csv"
 if not CLASSIFIED_PATH.exists():
     CLASSIFIED_PATH = PROCESSED_DIR / "seoul_bid_classified.csv"
@@ -488,9 +488,10 @@ elif page == "🗺️ 지역 분석":
 
         # consumer_fit_score 병합
         if not consumer_fit.empty:
-            fit_sub = consumer_fit[consumer_fit["district"] == selected][
-                ["item_category", "consumer_fit_score"]
-            ]
+            _fit_mask = consumer_fit["district"] == selected
+            if "city" in consumer_fit.columns and sel_city:
+                _fit_mask &= consumer_fit["city"] == sel_city
+            fit_sub = consumer_fit[_fit_mask][["item_category", "consumer_fit_score"]]
             result = result.merge(fit_sub, on="item_category", how="left")
 
         col1, col2 = st.columns([2, 1])
@@ -693,10 +694,10 @@ elif page == "🗺️ 지역 분석":
                         with st.spinner(f"{row.item_category} 해석 생성 중..."):
                             fit_score = None
                             if not consumer_fit.empty:
-                                fit_row = consumer_fit[
-                                    (consumer_fit["district"] == selected) &
-                                    (consumer_fit["item_category"] == row.item_category)
-                                ]
+                                _fm = (consumer_fit["district"] == selected) & (consumer_fit["item_category"] == row.item_category)
+                                if "city" in consumer_fit.columns and sel_city:
+                                    _fm &= consumer_fit["city"] == sel_city
+                                fit_row = consumer_fit[_fm]
                                 if not fit_row.empty:
                                     fit_score = float(fit_row.iloc[0]["consumer_fit_score"])
 
@@ -907,20 +908,34 @@ elif page == "👥 소비층 적합도":
     if consumer_fit.empty:
         st.warning(
             "소비층 분석 데이터가 없습니다. "
-            "`python -m src.features.build_consumer_fit` 를 실행하세요."
+            "`python -m src.features.build_national_consumer_fit` 를 실행하세요."
         )
     else:
-        if _selected_city and _selected_city != "서울특별시":
-            st.info("ℹ️ 소비층 적합도는 현재 서울 데이터만 제공됩니다. 시/도를 '전체' 또는 '서울'로 변경하세요.")
+        _is_national_fit = "city" in consumer_fit.columns
         tab1, tab2 = st.tabs(["자치구별 조회", "품목군별 조회"])
 
         with tab1:
-            districts_fit = sorted(consumer_fit["district"].dropna().unique().tolist())
-            sel_dist = st.selectbox("자치구를 선택하세요", districts_fit, key="fit_dist")
+            if _is_national_fit:
+                _fit_cities = sorted(consumer_fit["city"].dropna().unique().tolist())
+                _fit_city_labels = [CITY_LABELS.get(c, c) for c in _fit_cities]
+                _fit_seoul_label = CITY_LABELS.get("서울특별시", "서울특별시")
+                _fit_city_default = _fit_city_labels.index(_fit_seoul_label) if _fit_seoul_label in _fit_city_labels else 0
+                _fit_col1, _fit_col2 = st.columns(2)
+                with _fit_col1:
+                    sel_fit_city_label = st.selectbox("시/도 선택", _fit_city_labels, index=_fit_city_default, key="fit_city")
+                sel_fit_city = _fit_cities[_fit_city_labels.index(sel_fit_city_label)]
+                _fit_for_city = consumer_fit[consumer_fit["city"] == sel_fit_city]
+                with _fit_col2:
+                    districts_fit = sorted(_fit_for_city["district"].dropna().unique().tolist())
+                    sel_dist = st.selectbox("자치구를 선택하세요", districts_fit, key="fit_dist")
+            else:
+                sel_fit_city = None
+                _fit_for_city = consumer_fit
+                districts_fit = sorted(consumer_fit["district"].dropna().unique().tolist())
+                sel_dist = st.selectbox("자치구를 선택하세요", districts_fit, key="fit_dist")
 
-            dist_fit = consumer_fit[consumer_fit["district"] == sel_dist].sort_values(
-                "consumer_fit_score", ascending=False
-            )
+            _dist_mask = _fit_for_city["district"] == sel_dist
+            dist_fit = _fit_for_city[_dist_mask].sort_values("consumer_fit_score", ascending=False)
 
             col1, col2 = st.columns([2, 1])
             with col1:
@@ -987,8 +1002,14 @@ elif page == "👥 소비층 적합도":
             col1, col2 = st.columns([2, 1])
             with col1:
                 st.subheader(f"'{sel_cat_fit}' 소비층 적합 자치구 순위")
+                _cat_show_cols = (
+                    ["city", "district", "target_age_ratio", "consumer_fit_score"]
+                    if _is_national_fit
+                    else ["district", "target_age_ratio", "consumer_fit_score"]
+                )
                 st.dataframe(
-                    cat_fit[["district", "target_age_ratio", "consumer_fit_score"]].rename(columns={
+                    cat_fit[_cat_show_cols].rename(columns={
+                        "city": "시/도",
                         "district": "자치구",
                         "target_age_ratio": "타겟 연령 비중",
                         "consumer_fit_score": "소비층 적합도 (0~1)",
