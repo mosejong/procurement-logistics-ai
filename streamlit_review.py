@@ -25,7 +25,7 @@ def _find_table(national_name: str, seoul_name: str) -> Path:
 
 MATRIX_PATH = _find_table("opportunity_matrix_national.csv", "seoul_opportunity_matrix.csv")
 TOP_ITEMS_PATH = _find_table("top_items_by_district_national.csv", "seoul_top_items_by_district.csv")
-FEATURE_PATH = _find_table("feature_table_national.csv", "seoul_feature_table.csv")
+FEATURE_PATH = TABLES_DIR / "feature_table_national.csv"
 COMPETITION_PATH = TABLES_DIR / "seoul_competition_matrix.csv"
 CONSUMER_FIT_PATH = TABLES_DIR / "seoul_consumer_fit.csv"
 CLASSIFIED_PATH = PROCESSED_DIR / "bid_classified_national.csv"
@@ -123,7 +123,7 @@ if features_all.empty:
 # ── 사이드바 네비게이션 ─────────────────────────────────────────────────────
 page = st.sidebar.radio(
     "화면 선택",
-    ["📋 프로젝트 개요", "🔍 사업 유형 검색", "🗺️ 지역 분석", "📦 품목 분석", "⚖️ 자치구 비교", "👥 소비층 적합도", "🏪 경쟁 분석", "📊 원천 데이터"],
+    ["📋 프로젝트 개요", "🔍 사업 유형 검색", "🗺️ 지역 분석", "📦 품목 분석", "⚖️ 자치구 비교", "👥 소비층 적합도", "🏪 경쟁 분석", "🚚 물류 거점 분석", "📊 원천 데이터"],
 )
 
 # ── 시/도 필터 ──────────────────────────────────────────────────────────────
@@ -132,10 +132,15 @@ _has_city = "city" in features_all.columns and not features_all.empty
 if _has_city:
     _available_cities = sorted(features_all["city"].dropna().unique().tolist())
     _city_label_map = {c: CITY_LABELS.get(c, c) for c in _available_cities}
+    _city_options = ["전체"] + [_city_label_map[c] for c in _available_cities]
+    _seoul_label = _city_label_map.get("서울특별시", "서울특별시")
+    _seoul_default_idx = _city_options.index(_seoul_label) if _seoul_label in _city_options else 0
     _selected_city_label = st.sidebar.selectbox(
         "시/도 선택",
-        ["전체"] + [_city_label_map[c] for c in _available_cities],
+        _city_options,
+        index=_seoul_default_idx,
     )
+    st.sidebar.caption("※ 서울이 기본으로 적용됩니다.")
     _label_city_map = {v: k for k, v in _city_label_map.items()}
     _selected_city = None if _selected_city_label == "전체" else _label_city_map.get(_selected_city_label)
 else:
@@ -461,13 +466,25 @@ elif page == "📋 프로젝트 개요":
 elif page == "🗺️ 지역 분석":
     st.header("지역 선택 → 추천 품목")
 
-    if features.empty:
+    if features_all.empty:
         st.warning("분석 데이터가 없습니다. `python -m src.collect.build_seoul_sample`을 실행하세요.")
     else:
-        districts = sorted(features["district"].dropna().unique().tolist())
-        selected = st.selectbox("자치구를 선택하세요", districts)
+        # 2중 필터: 도/시 → 시군구 (사이드바 필터와 독립)
+        _tab_cities = sorted(features_all["city"].dropna().unique().tolist()) if "city" in features_all.columns else []
+        _tab_city_labels = [CITY_LABELS.get(c, c) for c in _tab_cities]
+        _seoul_default_label = _city_label_map.get("서울특별시", "서울특별시")
+        _default_city_idx = _tab_city_labels.index(_seoul_default_label) if _seoul_default_label in _tab_city_labels else 0
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            sel_city_label = st.selectbox("시/도 선택", _tab_city_labels, index=_default_city_idx, key="region_tab_city")
+        sel_city = _tab_cities[_tab_city_labels.index(sel_city_label)] if _tab_cities else None
+        _city_data = features_all[features_all["city"] == sel_city] if sel_city and "city" in features_all.columns else features_all
+        with col_f2:
+            districts = sorted(_city_data["district"].dropna().unique().tolist())
+            selected = st.selectbox("시군구 선택", districts, key="region_tab_district")
 
-        result = features[features["district"] == selected].sort_values("opportunity_score", ascending=False)
+        result = _city_data[_city_data["district"] == selected].sort_values("opportunity_score", ascending=False)
+        tab_classified = classified_all[classified_all["city"] == sel_city].copy() if sel_city and "city" in classified_all.columns else classified_all
 
         # consumer_fit_score 병합
         if not consumer_fit.empty:
@@ -497,6 +514,65 @@ elif page == "🗺️ 지역 분석":
                 }).fillna(display["recommendation_flag"])
                 st.dataframe(display, use_container_width=True, hide_index=True)
                 st.caption("✅ 추천  🚫 제외: 허가·면허 필요 업종  ⚠️ 데이터부족: 공고 10건 미만")
+
+                # 데이터부족 비율에 따라 contextual 안내
+                _n_low = (result["recommendation_flag"] == "데이터부족").sum()
+                _n_total = len(result)
+                _pct_low = _n_low / _n_total if _n_total > 0 else 0
+                if _n_low >= 3 or _pct_low >= 0.5:
+                    _shortage_items = result[result["recommendation_flag"] == "데이터부족"]["item_category"].tolist()
+                    if _pct_low >= 0.5:
+                        st.info(
+                            f"**{selected} 지역은 공고 건수가 적은 품목이 많습니다 ({_n_low}/{_n_total}개 품목 데이터부족)**\n\n"
+                            "**데이터부족 = 수요가 없다는 뜻이 아닙니다.** 두 가지 가능성이 있습니다.\n\n"
+                            "| 가능성 | 설명 |\n"
+                            "|---|---|\n"
+                            "| 🔵 블루오션 | 수요는 있지만 소액 수의계약·직접구매로 처리되어 공고가 안 뜸 |\n"
+                            "| ⚪ 실제 저수요 | 해당 지역 공공기관 수요 자체가 낮음 |"
+                        )
+                    else:
+                        st.info(
+                            f"**일부 품목 {_n_low}개가 데이터부족(공고 10건 미만)입니다.** "
+                            "수요 없음 vs 블루오션 — AI 판정으로 확인하세요."
+                        )
+
+                    # AI 판정 토글
+                    _ai_shortage_key = f"shortage_verdict_{selected}"
+                    _show_verdict = st.toggle("🤖 AI 판정 — 블루오션인지 저수요인지 분석", key=f"toggle_{_ai_shortage_key}")
+                    if _show_verdict:
+                        if _ai_shortage_key not in st.session_state.get("gemini_cache", {}):
+                            with st.spinner("인근 지역 데이터와 비교 분석 중..."):
+                                from src.recommendation.gemini_client import build_shortage_verdict, ShortageContext
+                                # 같은 시/도 내 데이터부족 품목별 비교
+                                _same_city = features_all[
+                                    (features_all["city"] == sel_city) &
+                                    (features_all["district"] != selected)
+                                ] if "city" in features_all.columns else features_all
+                                _total_city_dists = _same_city["district"].nunique()
+                                _comparison = []
+                                for _item in _shortage_items[:6]:
+                                    _item_rows = _same_city[_same_city["item_category"] == _item]
+                                    _with_data = (_item_rows["bid_count"] >= 10).sum()
+                                    _avg = _item_rows["bid_count"].mean() if not _item_rows.empty else 0
+                                    _comparison.append({
+                                        "item": _item, "city": CITY_LABELS.get(sel_city, sel_city),
+                                        "avg_count": float(_avg),
+                                        "districts_with_data": int(_with_data),
+                                        "total_districts": _total_city_dists,
+                                    })
+                                _dprofile = result["district_profile"].iloc[0] if "district_profile" in result.columns and not result.empty else "전국 주요 지역"
+                                _sctx = ShortageContext(
+                                    city=CITY_LABELS.get(sel_city, sel_city),
+                                    district=selected,
+                                    district_profile=_dprofile,
+                                    shortage_items=_shortage_items,
+                                    total_bids_in_district=int(result["bid_count"].sum()),
+                                    same_city_comparison=_comparison,
+                                )
+                                if "gemini_cache" not in st.session_state:
+                                    st.session_state["gemini_cache"] = {}
+                                st.session_state["gemini_cache"][_ai_shortage_key] = build_shortage_verdict(_sctx)
+                        st.markdown(st.session_state["gemini_cache"][_ai_shortage_key])
             else:
                 st.dataframe(display, use_container_width=True, hide_index=True)
 
@@ -526,6 +602,50 @@ elif page == "🗺️ 지역 분석":
                     value=f"{row.opportunity_score:.1f}점",
                     delta=f"공고 {int(row.bid_count)}건",
                 )
+
+        # 과수요 판정 — 상위 추천 품목 중 공고 수가 높은 항목 경쟁 구조 분석
+        _hot_rec = rec_result[rec_result["bid_count"] >= 20] if not rec_result.empty else pd.DataFrame()
+        if not _hot_rec.empty:
+            _overdemand_key = f"overdemand_{selected}"
+            st.markdown("---")
+            _hot_label = ", ".join(_hot_rec["item_category"].head(3).tolist())
+            st.info(
+                f"**수요 집중 품목 감지: {_hot_label}**  \n"
+                "공고 건수가 많은 품목은 수요가 확실하지만 기존 납품사와의 경쟁이 치열할 수 있습니다. "
+                "레드오션인지 아직 진입 여지가 있는지 AI가 판정합니다."
+            )
+            _show_overdemand = st.toggle("🤖 AI 판정 — 레드오션인지 진입 여지 있는지 분석", key=f"toggle_{_overdemand_key}")
+            if _show_overdemand:
+                if _overdemand_key not in st.session_state.get("gemini_cache", {}):
+                    with st.spinner("경쟁 구조 분석 중..."):
+                        from src.recommendation.gemini_client import build_overdemand_verdict, OverdemandContext
+                        _same_city_all = features_all[
+                            (features_all["city"] == sel_city) if "city" in features_all.columns else features_all.index.notna()
+                        ]
+                        _city_avg = _same_city_all.groupby("district")["bid_count"].sum().mean() if not _same_city_all.empty else 0
+                        _city_max = _same_city_all["bid_count"].max() if not _same_city_all.empty else 0
+                        _hot_items_data = []
+                        for _hrow in _hot_rec.head(5).itertuples():
+                            _hot_items_data.append({
+                                "item": _hrow.item_category,
+                                "bid_count": int(_hrow.bid_count),
+                                "opportunity_score": float(_hrow.opportunity_score),
+                                "competition_score": float(getattr(_hrow, "competition_score", 1.0)),
+                                "avg_lead_time_days": getattr(_hrow, "avg_lead_time_days", "?"),
+                            })
+                        _dprofile = result["district_profile"].iloc[0] if "district_profile" in result.columns and not result.empty else "전국 주요 지역"
+                        _octx = OverdemandContext(
+                            city=CITY_LABELS.get(sel_city, sel_city),
+                            district=selected,
+                            district_profile=_dprofile,
+                            hot_items=_hot_items_data,
+                            city_avg_bid_count=float(_city_avg),
+                            city_max_bid_count=float(_city_max),
+                        )
+                        if "gemini_cache" not in st.session_state:
+                            st.session_state["gemini_cache"] = {}
+                        st.session_state["gemini_cache"][_overdemand_key] = build_overdemand_verdict(_octx)
+                st.markdown(st.session_state["gemini_cache"][_overdemand_key])
 
         # AI 공공수요 해석 (Gemini)
         st.subheader("🤖 AI 공공수요 해석")
@@ -612,8 +732,8 @@ elif page == "🗺️ 지역 분석":
             st.dataframe(build_score_breakdown(result), use_container_width=True, hide_index=True)
 
         # 기관 유형 × 세부 품목 분석
-        if not classified.empty:
-            dist_classified = classified[classified["district"] == selected]
+        if not tab_classified.empty:
+            dist_classified = tab_classified[tab_classified["district"] == selected]
             if not dist_classified.empty:
                 st.markdown("---")
                 st.subheader("🏛️ 기관 유형별 수요")
@@ -725,20 +845,31 @@ elif page == "📦 품목 분석":
 
 # ══════════════════════════════════════════════════════════════════════════════
 elif page == "⚖️ 자치구 비교":
-    st.header("두 자치구 나란히 비교")
+    st.header("두 지역 나란히 비교")
+    st.caption("서로 다른 시/도 간 비교도 가능합니다. 예: 전라도 울진군 vs 경상도 구미시")
 
-    if features.empty:
+    if features_all.empty:
         st.warning("분석 데이터가 없습니다.")
     else:
-        districts = sorted(features["district"].dropna().unique().tolist())
+        _cmp_cities = sorted(features_all["city"].dropna().unique().tolist()) if "city" in features_all.columns else []
+        _cmp_labels = [CITY_LABELS.get(c, c) for c in _cmp_cities]
+        _seoul_cmp_label = _city_label_map.get("서울특별시", "서울특별시")
+        _seoul_cmp_idx = _cmp_labels.index(_seoul_cmp_label) if _seoul_cmp_label in _cmp_labels else 0
+
         col_a, col_b = st.columns(2)
         with col_a:
-            dist_a = st.selectbox("자치구 A", districts, index=0)
+            city_a_label = st.selectbox("A 시/도", _cmp_labels, index=_seoul_cmp_idx, key="cmp_city_a")
+            city_a = _cmp_cities[_cmp_labels.index(city_a_label)] if _cmp_cities else None
+            dists_a = sorted(features_all[features_all["city"] == city_a]["district"].dropna().unique().tolist()) if city_a else []
+            dist_a = st.selectbox("A 시군구", dists_a, index=0, key="cmp_dist_a")
         with col_b:
-            dist_b = st.selectbox("자치구 B", districts, index=min(1, len(districts) - 1))
+            city_b_label = st.selectbox("B 시/도", _cmp_labels, index=_seoul_cmp_idx, key="cmp_city_b")
+            city_b = _cmp_cities[_cmp_labels.index(city_b_label)] if _cmp_cities else None
+            dists_b = sorted(features_all[features_all["city"] == city_b]["district"].dropna().unique().tolist()) if city_b else []
+            dist_b = st.selectbox("B 시군구", dists_b, index=min(1, len(dists_b) - 1) if dists_b else 0, key="cmp_dist_b")
 
-        data_a = features[features["district"] == dist_a].set_index("item_category")
-        data_b = features[features["district"] == dist_b].set_index("item_category")
+        data_a = features_all[(features_all["city"] == city_a) & (features_all["district"] == dist_a)].set_index("item_category") if city_a else pd.DataFrame()
+        data_b = features_all[(features_all["city"] == city_b) & (features_all["district"] == dist_b)].set_index("item_category") if city_b else pd.DataFrame()
 
         all_items = sorted(set(data_a.index) | set(data_b.index))
 
@@ -779,6 +910,8 @@ elif page == "👥 소비층 적합도":
             "`python -m src.features.build_consumer_fit` 를 실행하세요."
         )
     else:
+        if _selected_city and _selected_city != "서울특별시":
+            st.info("ℹ️ 소비층 적합도는 현재 서울 데이터만 제공됩니다. 시/도를 '전체' 또는 '서울'로 변경하세요.")
         tab1, tab2 = st.tabs(["자치구별 조회", "품목군별 조회"])
 
         with tab1:
@@ -883,6 +1016,8 @@ elif page == "🏪 경쟁 분석":
             "`python -m src.features.build_competition_matrix` 를 실행하세요."
         )
     else:
+        if _selected_city and _selected_city != "서울특별시":
+            st.info("ℹ️ 경쟁 분석(소상공인 점포 밀도)은 현재 서울 데이터만 제공됩니다. 시/도를 '전체' 또는 '서울'로 변경하세요.")
         # 업종 선택
         inds_groups = sorted(competition["inds_group"].dropna().unique().tolist())
         selected_inds = st.selectbox("업종 대분류를 선택하세요", inds_groups)
@@ -974,6 +1109,160 @@ elif page == "🏪 경쟁 분석":
                     "stores_per_10k": "경쟁 밀도(1만명당)",
                 }), use_container_width=True, hide_index=True)
                 st.caption("'수요↑/경쟁↓ 점수'가 높을수록 공공수요 대비 경쟁이 낮은 유망 지역입니다.")
+
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "🚚 물류 거점 분석":
+    st.header("전국 공공조달 물류 거점 분석")
+    st.caption(
+        "공공조달 입찰공고는 기관 위치가 고정되고 예산 집행 주기가 일정한 예측 가능한 물류 수요입니다. "
+        "물리적 납품이 필요한 품목의 지역별 수요 밀도를 분석해 최적 물류 거점을 도출합니다."
+    )
+
+    # 물리적 납품 품목 (서비스 제외, 실물 운송 필요한 품목만)
+    PHYSICAL_CATEGORIES = {
+        "IT장비/전산", "급식/식자재", "교육물품/교구",
+        "사무용품/소모품", "의료/복지용품", "인쇄/홍보물", "차량/운송",
+    }
+
+    # 권역 분류
+    COVERAGE_ZONE = {
+        "서울특별시": "수도권", "경기도": "수도권", "인천광역시": "수도권",
+        "강원특별자치도": "강원",
+        "충청북도": "중부", "충청남도": "중부", "세종특별자치시": "중부", "대전광역시": "중부",
+        "전라북도": "서남부", "광주광역시": "서남부", "전라남도": "서남부",
+        "대구광역시": "동남부", "경상북도": "동남부",
+        "부산광역시": "동남부", "울산광역시": "동남부", "경상남도": "동남부",
+        "제주특별자치도": "도서",
+    }
+
+    if features_all.empty:
+        st.warning("분석 데이터가 없습니다.")
+    else:
+        # 시/도 × 품목 집계
+        _hub_df = features_all[features_all["item_category"].isin(PHYSICAL_CATEGORIES)].copy() if "item_category" in features_all.columns else pd.DataFrame()
+
+        if _hub_df.empty:
+            st.warning("물리적 납품 품목 데이터가 없습니다.")
+        else:
+            _city_agg = (
+                _hub_df.groupby("city")
+                .agg(
+                    physical_bids=("bid_count", "sum"),
+                    physical_amount=("amount_sum", "sum"),
+                    category_count=("item_category", "nunique"),
+                )
+                .reset_index()
+            )
+
+            # 허브 점수: 물리적 공고수(50%) + 금액(30%) + 품목 다양성(20%)
+            from src.features.build_opportunity_matrix import min_max_score
+            _city_agg["_bids_score"] = min_max_score(_city_agg["physical_bids"])
+            _city_agg["_amt_score"] = min_max_score(_city_agg["physical_amount"])
+            _city_agg["_cat_score"] = min_max_score(_city_agg["category_count"])
+            _city_agg["hub_score"] = (
+                (_city_agg["_bids_score"] * 0.50 + _city_agg["_amt_score"] * 0.30 + _city_agg["_cat_score"] * 0.20) * 100
+            ).round(1)
+            _city_agg["zone"] = _city_agg["city"].map(COVERAGE_ZONE).fillna("기타")
+            _city_agg["city_label"] = _city_agg["city"].map(CITY_LABELS).fillna(_city_agg["city"])
+            _city_agg = _city_agg.sort_values("hub_score", ascending=False).reset_index(drop=True)
+
+            # ── 섹션 1: 허브 점수 순위 ──────────────────────────
+            st.subheader("시/도별 물류 허브 점수 순위")
+            st.caption("물리적 납품 품목(IT·식자재·교구·사무용품·의료용품·인쇄물·차량)의 공고 수·금액·품목 다양성 종합 점수")
+
+            _display_agg = _city_agg[["city_label", "zone", "physical_bids", "physical_amount", "category_count", "hub_score"]].copy()
+            _display_agg["physical_amount"] = _display_agg["physical_amount"].apply(format_won)
+            _display_agg.insert(0, "순위", range(1, len(_display_agg) + 1))
+            st.dataframe(
+                _display_agg.rename(columns={
+                    "city_label": "시/도", "zone": "권역", "physical_bids": "물리적 공고 수",
+                    "physical_amount": "총 발주 금액", "category_count": "품목 다양성",
+                    "hub_score": "허브 점수",
+                }),
+                use_container_width=True, hide_index=True,
+            )
+
+            # ── 섹션 2: 권역별 TOP 거점 ─────────────────────────
+            st.subheader("권역별 대표 거점")
+            _zone_top = (
+                _city_agg.sort_values("hub_score", ascending=False)
+                .groupby("zone")
+                .first()
+                .reset_index()[["zone", "city_label", "physical_bids", "hub_score"]]
+                .sort_values("hub_score", ascending=False)
+            )
+            _zone_cols = st.columns(min(len(_zone_top), 4))
+            for i, (col, row) in enumerate(zip(_zone_cols, _zone_top.itertuples())):
+                with col:
+                    tier = "🥇 1티어" if i == 0 else ("🥈 2티어" if i == 1 else ("🥉 3티어" if i == 2 else f"{i+1}위"))
+                    st.metric(
+                        label=f"{tier} · {row.zone}",
+                        value=row.city_label,
+                        delta=f"공고 {int(row.physical_bids):,}건",
+                    )
+
+            # ── 섹션 3: 품목별 수요 집중 지역 ────────────────────
+            st.subheader("품목별 수요 집중 지역")
+            st.caption("각 물리적 납품 품목이 가장 많이 발주되는 시/도 TOP 3")
+            _cat_city = (
+                _hub_df.groupby(["item_category", "city"])["bid_count"]
+                .sum()
+                .reset_index()
+                .sort_values(["item_category", "bid_count"], ascending=[True, False])
+            )
+            _cat_city["city_label"] = _cat_city["city"].map(CITY_LABELS).fillna(_cat_city["city"])
+            _cat_top3 = (
+                _cat_city.groupby("item_category")
+                .apply(lambda x: x.nlargest(3, "bid_count"))
+                .reset_index(drop=True)
+            )
+            _pivot_rows = []
+            for cat, grp in _cat_top3.groupby("item_category"):
+                row_d = {"품목": cat}
+                for rank, (_, r) in enumerate(grp.iterrows(), 1):
+                    row_d[f"TOP{rank}"] = f"{r['city_label']} ({int(r['bid_count']):,}건)"
+                _pivot_rows.append(row_d)
+            if _pivot_rows:
+                st.dataframe(pd.DataFrame(_pivot_rows), use_container_width=True, hide_index=True)
+
+            # ── 섹션 4: AI 물류 허브 전략 ────────────────────────
+            st.subheader("🤖 AI 물류 거점 전략 분석")
+            st.caption("전국 공공수요 분포를 바탕으로 최적 1·2·3티어 물류 허브 구조를 제안합니다.")
+            _show_hub_ai = st.toggle("AI 전략 분석 시작", key="hub_ai_toggle")
+            if _show_hub_ai:
+                _hub_ai_key = "hub_strategy_national"
+                if _hub_ai_key not in st.session_state.get("gemini_cache", {}):
+                    with st.spinner("전국 수요 패턴 분석 중..."):
+                        from src.recommendation.gemini_client import build_hub_strategy, HubStrategyContext
+
+                        # 후보별 주요 품목
+                        _top_cats_by_city = (
+                            _hub_df.groupby(["city", "item_category"])["bid_count"]
+                            .sum()
+                            .reset_index()
+                            .sort_values(["city", "bid_count"], ascending=[True, False])
+                        )
+                        _candidates = []
+                        for _, row in _city_agg.iterrows():
+                            _top_cats = _top_cats_by_city[_top_cats_by_city["city"] == row["city"]]["item_category"].head(3).tolist()
+                            _candidates.append({
+                                "city": row["city_label"],
+                                "zone": row["zone"],
+                                "physical_bids": int(row["physical_bids"]),
+                                "physical_amount": float(row["physical_amount"]),
+                                "top_categories": _top_cats,
+                                "hub_score": float(row["hub_score"]),
+                            })
+
+                        _hctx = HubStrategyContext(
+                            hub_candidates=_candidates,
+                            national_total_bids=int(_hub_df["bid_count"].sum()),
+                            national_total_amount=float(_hub_df["amount_sum"].sum()),
+                        )
+                        if "gemini_cache" not in st.session_state:
+                            st.session_state["gemini_cache"] = {}
+                        st.session_state["gemini_cache"][_hub_ai_key] = build_hub_strategy(_hctx)
+                st.markdown(st.session_state["gemini_cache"][_hub_ai_key])
 
 # ══════════════════════════════════════════════════════════════════════════════
 elif page == "📊 원천 데이터":

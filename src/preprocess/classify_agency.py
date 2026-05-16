@@ -138,13 +138,25 @@ _ITEM_DETAIL_RULES: list[tuple[str, list[str]]] = [
 def classify_item_detail(bid_title: str) -> str:
     """
     공고명 -> item_category_detail 단일 분류.
-    첫 번째 매칭 키워드 기준 적용, 미매칭은 기타/미분류 반환.
+
+    1단계: 키워드 규칙 순서 매칭 (기존 동작 유지)
+    2단계: 키워드 미매칭(기타/미분류)인 경우 ML 모델로 재시도
+           — models/item_classifier.pkl 없으면 자동으로 건너뜀
     """
     text = normalize_text(bid_title)
 
     for category, keywords in _ITEM_DETAIL_RULES:
         if any(kw in text for kw in keywords):
             return category
+
+    # ML fallback: 키워드 미매칭 건만 ML 재분류 시도
+    try:
+        from src.modeling.item_classifier import predict as ml_predict
+        ml_result = ml_predict(bid_title)
+        if ml_result is not None:
+            return ml_result
+    except Exception:
+        pass
 
     return "기타/미분류"
 

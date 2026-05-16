@@ -24,3 +24,9 @@ my.txt
 *.bak
 
 /old/*
+
+# ML 모델 바이너리 (로컬 생성, train_classifier.py로 재현 가능)
+models/*.pkl
+
+# 자동 메모리 (로컬 전용)
+memory/
