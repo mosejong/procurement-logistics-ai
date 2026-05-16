@@ -358,6 +358,27 @@ with tab_map:
         )
         st.session_state["map_city_val"] = selected_region
 
+        # ── 점수 산정 근거 ────────────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown(
+            '<p style="font-size:11px;font-weight:700;color:#475569;margin:0 0 6px 0;">📐 점수 산정 근거</p>',
+            unsafe_allow_html=True,
+        )
+        _score_desc = {
+            "기회점수":       "공고수(40%) + 금액(25%) + 최근성(15%) + 경쟁도(20%) 가중 합산. 전체 지역 min-max 정규화.",
+            "보정 점수":      "기회점수 × 5년 생존율 × (1 - 소멸률). KOSIS 신생기업 통계 반영.",
+            "공고수":         "나라장터 입찰공고 건수 합계. 공공수요 빈도를 직접 반영.",
+            "경쟁도":         "지명경쟁 제외 비율. 높을수록 신규 업체 진입 가능한 개방입찰 多.",
+            "소비층 적합도":  "품목 주소비층 연령대 비중. 행안부 연령별 인구 기반 (0~1).",
+            "물류 거점 점수": "품목군 내 공고수 min-max 정규화 (0~100). 납품 물리적 수요 집중도.",
+        }
+        for _k, _v in _score_desc.items():
+            st.markdown(
+                f'<p style="font-size:10px;color:#64748B;margin:0 0 4px 0;">'
+                f'<b style="color:#334155;">{_k}</b><br>{_v}</p>',
+                unsafe_allow_html=True,
+            )
+
     _color_col = _METRIC_OPTIONS[selected_metric_label]
     _selected_city: str | None = None if selected_region == "전국" else selected_region
     _drilldown_city: str | None = st.session_state.get("map_drilldown_city")
@@ -859,21 +880,20 @@ div[data-testid="stHorizontalBlock"] .stButton > button {
             )
             st.markdown(f"**월별 공고 추이**  <span style='font-size:11px;color:#94A3B8;'>수집 기간: {_period_label}</span>", unsafe_allow_html=True)
             if not trend.empty:
-                fig_trend = px.line(
-                    trend, x="연월", y="공고 수",
-                    markers=False,
+                # 최근 18개월만 표시 (초기 저수집 기간 제외)
+                _trend_recent = trend.tail(18) if len(trend) > 18 else trend
+                fig_trend = px.bar(
+                    _trend_recent, x="연월", y="공고 수",
+                    labels={"연월": "", "공고 수": "공고 수"},
                     color_discrete_sequence=["#3B82F6"],
                 )
-                fig_trend.update_xaxes(
-                    tickangle=45,
-                    tickmode="array",
-                    tickvals=trend["연월"].iloc[::max(1, len(trend)//6)].tolist(),
-                )
+                fig_trend.update_xaxes(tickangle=45)
                 fig_trend.update_layout(
-                    height=280,
-                    margin={"r": 0, "t": 10, "l": 0, "b": 40},
+                    height=300,
+                    margin={"r": 0, "t": 10, "l": 0, "b": 50},
                     paper_bgcolor="rgba(0,0,0,0)",
                     plot_bgcolor="rgba(0,0,0,0)",
+                    bargap=0.15,
                 )
                 st.plotly_chart(fig_trend, use_container_width=True)
         else:
