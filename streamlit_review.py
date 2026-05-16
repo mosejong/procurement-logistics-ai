@@ -26,7 +26,7 @@ def _find_table(national_name: str, seoul_name: str) -> Path:
 MATRIX_PATH = _find_table("opportunity_matrix_national.csv", "seoul_opportunity_matrix.csv")
 TOP_ITEMS_PATH = _find_table("top_items_by_district_national.csv", "seoul_top_items_by_district.csv")
 FEATURE_PATH = TABLES_DIR / "feature_table_national.csv"
-COMPETITION_PATH = TABLES_DIR / "seoul_competition_matrix.csv"
+COMPETITION_PATH = _find_table("national_competition_matrix.csv", "seoul_competition_matrix.csv")
 CONSUMER_FIT_PATH = _find_table("national_consumer_fit.csv", "seoul_consumer_fit.csv")
 CLASSIFIED_PATH = PROCESSED_DIR / "bid_classified_national.csv"
 if not CLASSIFIED_PATH.exists():
@@ -113,6 +113,7 @@ matrix_all = load_csv(MATRIX_PATH)
 top_items_all = load_csv(TOP_ITEMS_PATH)
 features_all = load_csv(FEATURE_PATH)
 competition = load_csv(COMPETITION_PATH)
+_is_national_comp = "city" in competition.columns and not competition.empty
 consumer_fit = load_csv(CONSUMER_FIT_PATH)
 classified_all = load_csv(CLASSIFIED_PATH)
 cleaned_all = load_csv(CLEANED_PATH)
@@ -348,7 +349,7 @@ if page == "🔍 사업 유형 검색":
                 _biz_to_inds = {
                     "문구점": "소매", "카페": "음식/카페", "커피": "음식/카페",
                     "식당": "음식/카페", "음식점": "음식/카페",
-                    "미용": "생활서비스", "헬스장": "스포츠",
+                    "미용": "생활서비스", "헬스장": "관광/여가",
                     "편의점": "소매", "옷가게": "소매", "약국": "의료/복지",
                     "학원": "교육", "인테리어": "생활서비스",
                 }
@@ -1034,102 +1035,125 @@ elif page == "🏪 경쟁 분석":
     if competition.empty:
         st.warning(
             "경쟁 분석 데이터가 없습니다. "
-            "`python -m src.features.build_competition_matrix` 를 실행하세요."
+            "`python -m src.collect.build_national_competition` 를 실행하세요."
         )
     else:
-        if _selected_city and _selected_city != "서울특별시":
-            st.info("ℹ️ 경쟁 분석(소상공인 점포 밀도)은 현재 서울 데이터만 제공됩니다. 시/도를 '전체' 또는 '서울'로 변경하세요.")
+        # 국가 데이터면 시/도 필터 적용
+        comp_view = competition.copy()
+        if _is_national_comp and _selected_city:
+            comp_view = comp_view[comp_view["city"] == _selected_city]
+
+        if _is_national_comp:
+            city_count = competition["city"].nunique()
+            dist_count = competition["district"].nunique()
+            st.caption(f"전국 데이터 ({city_count}개 시/도, {dist_count}개 지역) — 강원특별자치도 제외 (API 미지원)")
+        else:
+            st.caption("서울 데이터 (25개 자치구)")
+
         # 업종 선택
-        inds_groups = sorted(competition["inds_group"].dropna().unique().tolist())
-        selected_inds = st.selectbox("업종 대분류를 선택하세요", inds_groups)
+        inds_groups = sorted(comp_view["inds_group"].dropna().unique().tolist())
+        if not inds_groups:
+            st.info("선택한 시/도에 데이터가 없습니다.")
+        else:
+            selected_inds = st.selectbox("업종 대분류를 선택하세요", inds_groups)
 
-        filtered = competition[competition["inds_group"] == selected_inds].sort_values(
-            "stores_per_10k", ascending=False
-        )
-
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            st.subheader(f"'{selected_inds}' 업종 자치구별 밀도")
-            st.dataframe(
-                filtered[["district", "store_count", "stores_per_10k"]].rename(columns={
-                    "district": "자치구",
-                    "store_count": "점포 수",
-                    "stores_per_10k": "인구 1만명당 점포",
-                }),
-                use_container_width=True,
-                hide_index=True,
+            filtered = comp_view[comp_view["inds_group"] == selected_inds].sort_values(
+                "stores_per_10k", ascending=False
             )
 
-        with col2:
-            st.subheader("해석")
-            if not filtered.empty:
-                top = filtered.iloc[0]
-                bottom = filtered.iloc[-1]
-                st.metric("경쟁 가장 치열", top["district"], f"{top['stores_per_10k']} 점포/1만명")
-                st.metric("경쟁 상대적 낮음", bottom["district"], f"{bottom['stores_per_10k']} 점포/1만명")
-                st.markdown(
-                    """
-> **stores_per_10k** = 인구 1만명당 점포 수
-> 수치가 낮은 지역 = 해당 업종 창업 시 경쟁 부담 상대적으로 적음
-> 수치가 높은 지역 = 수요도 크지만 경쟁도 치열
-                    """
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                st.subheader(f"'{selected_inds}' 업종 지역별 밀도")
+                show_cols = (["city", "district"] if _is_national_comp else ["district"]) + ["store_count", "stores_per_10k"]
+                show_cols = [c for c in show_cols if c in filtered.columns]
+                st.dataframe(
+                    filtered[show_cols].rename(columns={
+                        "city": "시/도",
+                        "district": "시/군/구",
+                        "store_count": "점포 수",
+                        "stores_per_10k": "인구 1만명당 점포",
+                    }),
+                    use_container_width=True,
+                    hide_index=True,
                 )
 
-        # 전체 업종 비교 히트맵 대용 테이블
-        st.subheader("전체 업종 × 자치구 점포 밀도 (인구 1만명당)")
-        pivot = competition.pivot_table(
-            index="inds_group", columns="district", values="stores_per_10k", fill_value=0
-        ).round(1)
-        st.dataframe(pivot, use_container_width=True)
+            with col2:
+                st.subheader("해석")
+                if not filtered.empty:
+                    top = filtered.iloc[0]
+                    bottom = filtered.iloc[-1]
+                    top_label = f"{top.get('city','')} {top['district']}".strip() if _is_national_comp else top["district"]
+                    bot_label = f"{bottom.get('city','')} {bottom['district']}".strip() if _is_national_comp else bottom["district"]
+                    st.metric("경쟁 가장 치열", top_label, f"{top['stores_per_10k']} 점포/1만명")
+                    st.metric("경쟁 상대적 낮음", bot_label, f"{bottom['stores_per_10k']} 점포/1만명")
+                    st.markdown(
+                        """
+> **stores_per_10k** = 인구 1만명당 점포 수
+> 수치가 낮은 지역 = 창업 시 경쟁 부담 상대적으로 적음
+> 수치가 높은 지역 = 수요도 크지만 경쟁도 치열
+                        """
+                    )
 
-        st.markdown("---")
-        st.subheader("공공수요 vs 경쟁 포화도 비교")
-        st.caption("같은 자치구에서 공공수요(opportunity_score)는 높고 점포 밀도는 낮은 업종을 찾으세요.")
-        if not features.empty and not competition.empty:
-            # 업종 선택
-            bid_cats = sorted(features["item_category"].dropna().unique().tolist())
-            sel_cat = st.selectbox("비교할 품목군", bid_cats, key="comp_cat")
-            cat_bids = features[features["item_category"] == sel_cat][
-                ["district", "bid_count", "opportunity_score"]
-            ].copy()
+            # 전체 업종 비교 히트맵 대용 테이블
+            st.subheader("전체 업종 × 지역 점포 밀도 (인구 1만명당)")
+            pivot_col = "district"
+            if _is_national_comp and not _selected_city:
+                st.caption("지역이 많아 특정 시/도를 선택하면 더 보기 좋습니다.")
+            pivot = comp_view.pivot_table(
+                index="inds_group", columns=pivot_col, values="stores_per_10k", fill_value=0
+            ).round(1)
+            st.dataframe(pivot, use_container_width=True)
 
-            # inds_group 이름이 품목군과 매핑이 다르므로 직접 매핑
-            # item_category_detail → competition inds_group 매핑
-            cat_stores_map = {
-                "급식/식자재":      "음식/카페",
-                "방역/소독":        "생활서비스",
-                "청소/환경미화":    "생활서비스",
-                "교육물품/교구":    "교육",
-                "의료/복지용품":    "의료/복지",
-                "IT장비/전산":      "기타",
-                "시설유지보수":     "기타",
-                "인쇄/홍보물":      "소매",
-                "사무용품/소모품":  "소매",
-                "차량/운송":        "기타",
-                "행사/운영용역":    "생활서비스",
-                "전문용역/컨설팅":  "기타",
-                "경비/보안":        "생활서비스",
-                "급수/전기/설비":   "기타",
-                "조경/녹지관리":    "생활서비스",
-                "보험/금융":        "기타",
-                "기타/미분류":      "기타",
-            }
-            mapped_inds = cat_stores_map.get(sel_cat, "기타")
-            cat_comp = competition[competition["inds_group"] == mapped_inds][
-                ["district", "stores_per_10k"]
-            ].copy()
+            st.markdown("---")
+            st.subheader("공공수요 vs 경쟁 포화도 비교")
+            st.caption("같은 지역에서 공공수요(opportunity_score)는 높고 점포 밀도는 낮은 업종을 찾으세요.")
+            if not features.empty:
+                bid_cats = sorted(features["item_category"].dropna().unique().tolist())
+                sel_cat = st.selectbox("비교할 품목군", bid_cats, key="comp_cat")
 
-            if not cat_comp.empty and not cat_bids.empty:
-                merged = pd.merge(cat_bids, cat_comp, on="district", how="left").fillna(0)
-                merged["수요↑/경쟁↓ 점수"] = (merged["opportunity_score"] - merged["stores_per_10k"] / 10).round(2)
-                merged = merged.sort_values("수요↑/경쟁↓ 점수", ascending=False)
-                st.dataframe(merged.rename(columns={
-                    "district": "자치구",
-                    "bid_count": "공공수요 공고수",
-                    "opportunity_score": "공공수요 점수",
-                    "stores_per_10k": "경쟁 밀도(1만명당)",
-                }), use_container_width=True, hide_index=True)
-                st.caption("'수요↑/경쟁↓ 점수'가 높을수록 공공수요 대비 경쟁이 낮은 유망 지역입니다.")
+                feat_cols = ["city", "district", "bid_count", "opportunity_score"] if "city" in features.columns else ["district", "bid_count", "opportunity_score"]
+                feat_cols = [c for c in feat_cols if c in features.columns]
+                cat_bids = features[features["item_category"] == sel_cat][feat_cols].copy()
+                if _selected_city and "city" in cat_bids.columns:
+                    cat_bids = cat_bids[cat_bids["city"] == _selected_city]
+
+                cat_stores_map = {
+                    "급식/식자재":      "음식/카페",
+                    "방역/소독":        "생활서비스",
+                    "청소/환경미화":    "생활서비스",
+                    "교육물품/교구":    "교육",
+                    "의료/복지용품":    "의료/복지",
+                    "IT장비/전산":      "기타",
+                    "시설유지보수":     "기타",
+                    "인쇄/홍보물":      "소매",
+                    "사무용품/소모품":  "소매",
+                    "차량/운송":        "기타",
+                    "행사/운영용역":    "생활서비스",
+                    "전문용역/컨설팅":  "기타",
+                    "경비/보안":        "생활서비스",
+                    "급수/전기/설비":   "기타",
+                    "조경/녹지관리":    "생활서비스",
+                    "보험/금융":        "기타",
+                    "기타/미분류":      "기타",
+                }
+                mapped_inds = cat_stores_map.get(sel_cat, "기타")
+                comp_cols = (["city", "district"] if _is_national_comp else ["district"]) + ["stores_per_10k"]
+                comp_cols = [c for c in comp_cols if c in comp_view.columns]
+                cat_comp = comp_view[comp_view["inds_group"] == mapped_inds][comp_cols].copy()
+
+                merge_key = ["city", "district"] if (_is_national_comp and "city" in cat_bids.columns and "city" in cat_comp.columns) else ["district"]
+                if not cat_comp.empty and not cat_bids.empty:
+                    merged = pd.merge(cat_bids, cat_comp, on=merge_key, how="left").fillna(0)
+                    merged["수요↑/경쟁↓ 점수"] = (merged["opportunity_score"] - merged["stores_per_10k"] / 10).round(2)
+                    merged = merged.sort_values("수요↑/경쟁↓ 점수", ascending=False)
+                    rename_map = {
+                        "city": "시/도", "district": "시/군/구",
+                        "bid_count": "공공수요 공고수",
+                        "opportunity_score": "공공수요 점수",
+                        "stores_per_10k": "경쟁 밀도(1만명당)",
+                    }
+                    st.dataframe(merged.rename(columns=rename_map), use_container_width=True, hide_index=True)
+                    st.caption("'수요↑/경쟁↓ 점수'가 높을수록 공공수요 대비 경쟁이 낮은 유망 지역입니다.")
 
 # ══════════════════════════════════════════════════════════════════════════════
 elif page == "🚚 물류 거점 분석":
