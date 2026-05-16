@@ -1259,24 +1259,55 @@ with tab_region:
         col1, col2 = st.columns([2, 1])
         with col1:
             st.subheader(f"{selected} 품목별 공공수요 점수")
-            show_cols = [c for c in [
-                "item_category", "bid_count", "amount_sum",
-                "opportunity_score", "consumer_fit_score",
-                "recommendation_flag",
-                "bids_per_10k_population", "avg_lead_time_days",
-            ] if c in result.columns]
-            display = result[show_cols].copy()
-            if "amount_sum" in display.columns:
-                display["amount_sum"] = display["amount_sum"].apply(format_won)
 
-            if "recommendation_flag" in display.columns:
-                display["recommendation_flag"] = display["recommendation_flag"].map({
-                    "추천": "✅ 추천",
-                    "제외": "🚫 제외",
-                    "데이터부족": "⚠️ 데이터부족",
-                }).fillna(display["recommendation_flag"])
-                st.dataframe(display, use_container_width=True, hide_index=True)
-                st.caption("✅ 추천  🚫 제외: 허가·면허 필요 업종  ⚠️ 데이터부족: 공고 10건 미만")
+            if "recommendation_flag" in result.columns and not result.empty:
+                # ── bar chart: opportunity_score by item_category ──────────
+                _flag_color = {"추천": "#16A34A", "제외": "#DC2626", "데이터부족": "#F59E0B"}
+                _r_sorted = result.sort_values("opportunity_score")
+                _r_sorted["_color"] = _r_sorted["recommendation_flag"].map(_flag_color).fillna("#94A3B8")
+                _cf_text = (
+                    _r_sorted["consumer_fit_score"].apply(lambda v: f"적합도 {v:.2f}" if pd.notna(v) else "")
+                    if "consumer_fit_score" in _r_sorted.columns else [""] * len(_r_sorted)
+                )
+                fig_reg = go.Figure(go.Bar(
+                    x=_r_sorted["opportunity_score"],
+                    y=_r_sorted["item_category"],
+                    orientation="h",
+                    marker_color=_r_sorted["_color"].tolist(),
+                    text=_r_sorted["bid_count"].apply(lambda v: f"{int(v)}건"),
+                    textposition="outside",
+                    hovertemplate="<b>%{y}</b><br>기회점수: %{x:.2f}<br>공고수: %{text}<extra></extra>",
+                ))
+                fig_reg.update_layout(
+                    height=max(320, len(_r_sorted) * 28),
+                    margin={"t": 10, "b": 0, "l": 0, "r": 60},
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                    xaxis_title="기회점수",
+                )
+                st.plotly_chart(fig_reg, use_container_width=True)
+
+                # 범례
+                _leg_html = "".join(
+                    f'<span style="background:{c}20;color:{c};padding:2px 10px;border-radius:10px;'
+                    f'font-size:12px;font-weight:600;margin-right:6px;">{l}</span>'
+                    for l, c in [("✅ 추천", "#16A34A"), ("⚠️ 데이터부족", "#F59E0B"), ("🚫 제외", "#DC2626")]
+                )
+                st.markdown(_leg_html, unsafe_allow_html=True)
+
+                # 상세 테이블은 접어두기
+                with st.expander("상세 수치 보기"):
+                    show_cols = [c for c in [
+                        "item_category", "bid_count", "amount_sum",
+                        "opportunity_score", "consumer_fit_score",
+                        "recommendation_flag", "bids_per_10k_population",
+                    ] if c in result.columns]
+                    _disp = result[show_cols].copy()
+                    if "amount_sum" in _disp.columns:
+                        _disp["amount_sum"] = _disp["amount_sum"].apply(format_won)
+                    _disp["recommendation_flag"] = _disp["recommendation_flag"].map({
+                        "추천": "✅ 추천", "제외": "🚫 제외", "데이터부족": "⚠️ 데이터부족",
+                    }).fillna(_disp["recommendation_flag"])
+                    st.dataframe(_disp, use_container_width=True, hide_index=True)
 
                 # 데이터부족 비율에 따라 contextual 안내
                 _n_low = (result["recommendation_flag"] == "데이터부족").sum()
@@ -1717,26 +1748,39 @@ with tab_consumer:
             col1, col2 = st.columns([2, 1])
             with col1:
                 st.subheader(f"{sel_dist} 품목군별 소비층 적합도")
-                st.dataframe(
-                    dist_fit[["item_category", "target_age_ratio", "consumer_fit_score"]].rename(columns={
-                        "item_category": "품목군",
-                        "target_age_ratio": "타겟 연령 비중",
-                        "consumer_fit_score": "소비층 적합도 (0~1)",
-                    }),
-                    use_container_width=True,
-                    hide_index=True,
-                )
+                if not dist_fit.empty:
+                    _cf_sorted = dist_fit.sort_values("consumer_fit_score")
+                    fig_cf = go.Figure(go.Bar(
+                        x=_cf_sorted["consumer_fit_score"],
+                        y=_cf_sorted["item_category"],
+                        orientation="h",
+                        marker=dict(
+                            color=_cf_sorted["consumer_fit_score"],
+                            colorscale=[[0, "#EFF6FF"], [1, "#2563EB"]],
+                            showscale=False,
+                        ),
+                        text=_cf_sorted["consumer_fit_score"].apply(lambda v: f"{v:.2f}"),
+                        textposition="outside",
+                        hovertemplate="<b>%{y}</b><br>소비층 적합도: %{x:.3f}<extra></extra>",
+                    ))
+                    fig_cf.update_layout(
+                        height=max(300, len(_cf_sorted) * 28),
+                        margin={"t": 10, "b": 0, "l": 0, "r": 60},
+                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                        xaxis={"range": [0, 1.1], "title": "소비층 적합도 (0~1)"},
+                    )
+                    st.plotly_chart(fig_cf, use_container_width=True)
             with col2:
                 st.subheader("해석 기준")
                 st.markdown(
                     f"""
 **{sel_dist}** 자치구의 연령 인구 구성 기반 점수입니다.
 
-- **타겟 연령 비중**: 해당 품목군의 주소비층 연령대가 전체 인구에서 차지하는 비율
-- **소비층 적합도**: 분석 대상 지역 중 상대 비교 (0~1, 높을수록 해당 구에 소비층 집중)
+- **소비층 적합도**: 주소비층 연령대가 전체 인구에서 차지하는 비율 기준 정규화 (0~1)
 
-> 예: **의료/복지**는 60대+ 비중이 높은 구에서 점수가 높음
-> 예: **교육/교구**는 0~20대 비중이 높은 구에서 점수가 높음
+> 의료/복지 → 60대+
+> 교육/교구 → 0~20대
+> 급식/식자재 → 전 연령
                     """
                 )
 
@@ -1757,16 +1801,36 @@ with tab_consumer:
                     combined["opportunity_score"] * 0.6 + combined["consumer_fit_score"] * 100 * 0.4
                 ).round(2)
                 combined = combined.sort_values("종합 점수", ascending=False)
-                st.dataframe(combined.rename(columns={
-                    "item_category": "품목군",
-                    "bid_count": "공고 수",
-                    "opportunity_score": "공공수요 점수",
-                    "consumer_fit_score": "소비층 적합도",
-                }), use_container_width=True, hide_index=True)
-                st.caption(
-                    "종합 점수 = 공공수요 점수 × 60% + 소비층 적합도 × 100 × 40%. "
-                    "가중치는 조정 가능하며, 현재는 공공수요에 더 비중을 뒀습니다."
-                )
+                # scatter: x=공공수요, y=소비층 적합도, size=공고수
+                if len(combined) >= 2:
+                    fig_sc = px.scatter(
+                        combined.rename(columns={"item_category": "품목군"}),
+                        x="opportunity_score", y="consumer_fit_score",
+                        size="bid_count", text="품목군",
+                        size_max=40,
+                        labels={"opportunity_score": "공공수요 점수", "consumer_fit_score": "소비층 적합도"},
+                        color="종합 점수",
+                        color_continuous_scale="Blues",
+                    )
+                    fig_sc.update_traces(textposition="top center", textfont_size=10)
+                    fig_sc.update_layout(
+                        height=380,
+                        margin={"t": 20, "b": 20, "l": 0, "r": 0},
+                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                        coloraxis_showscale=False,
+                    )
+                    # 우상단 영역 강조선
+                    fig_sc.add_shape(type="rect",
+                        x0=combined["opportunity_score"].quantile(0.5), y0=combined["consumer_fit_score"].median(),
+                        x1=combined["opportunity_score"].max() * 1.05, y1=1.05,
+                        fillcolor="rgba(22,163,74,0.05)", line=dict(color="#16A34A", width=1, dash="dot"))
+                    fig_sc.add_annotation(
+                        x=combined["opportunity_score"].max(), y=1.0,
+                        text="최우선 후보", showarrow=False, font=dict(color="#16A34A", size=11))
+                    st.plotly_chart(fig_sc, use_container_width=True)
+                    st.caption("우상단 = 공공수요도 높고 소비층도 맞는 최우선 후보. 원 크기 = 공고 수.")
+                else:
+                    st.dataframe(combined, use_container_width=True, hide_index=True)
 
         with tab2:
             cats_fit = sorted(consumer_fit["item_category"].dropna().unique().tolist())
@@ -1779,21 +1843,35 @@ with tab_consumer:
             col1, col2 = st.columns([2, 1])
             with col1:
                 st.subheader(f"'{sel_cat_fit}' 소비층 적합 자치구 순위")
-                _cat_show_cols = (
-                    ["city", "district", "target_age_ratio", "consumer_fit_score"]
-                    if _is_national_fit
-                    else ["district", "target_age_ratio", "consumer_fit_score"]
-                )
-                st.dataframe(
-                    cat_fit[_cat_show_cols].rename(columns={
-                        "city": "시/도",
-                        "district": "자치구",
-                        "target_age_ratio": "타겟 연령 비중",
-                        "consumer_fit_score": "소비층 적합도 (0~1)",
-                    }),
-                    use_container_width=True,
-                    hide_index=True,
-                )
+                if not cat_fit.empty:
+                    _top_cf = cat_fit.head(20).copy()
+                    _top_cf["label"] = (
+                        _top_cf["city"].str[:2] + " " + _top_cf["district"]
+                        if _is_national_fit and "city" in _top_cf.columns
+                        else _top_cf["district"]
+                    )
+                    _top_cf = _top_cf.sort_values("consumer_fit_score")
+                    fig_cat = go.Figure(go.Bar(
+                        x=_top_cf["consumer_fit_score"],
+                        y=_top_cf["label"],
+                        orientation="h",
+                        marker=dict(
+                            color=_top_cf["consumer_fit_score"],
+                            colorscale=[[0, "#EFF6FF"], [1, "#7C3AED"]],
+                            showscale=False,
+                        ),
+                        text=_top_cf["consumer_fit_score"].apply(lambda v: f"{v:.2f}"),
+                        textposition="outside",
+                    ))
+                    fig_cat.update_layout(
+                        height=max(350, len(_top_cf) * 26),
+                        margin={"t": 10, "b": 0, "l": 0, "r": 60},
+                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                        xaxis={"range": [0, 1.15], "title": "소비층 적합도 (0~1)"},
+                    )
+                    st.plotly_chart(fig_cat, use_container_width=True)
+                    if len(cat_fit) > 20:
+                        st.caption(f"상위 20개 지역 표시 (전체 {len(cat_fit)}개)")
             with col2:
                 if not cat_fit.empty:
                     top_fit = cat_fit.iloc[0]
@@ -1815,15 +1893,27 @@ with tab_competition:
             "`python -m src.collect.build_national_competition` 를 실행하세요."
         )
     else:
-        # ctx_city 기준 필터 (전국 지도 탭과 연동)
         comp_view = competition.copy()
-        if _is_national_comp and _ctx_city_cp:
-            comp_view = comp_view[comp_view["city"] == _ctx_city_cp]
 
         if _is_national_comp:
             city_count = competition["city"].nunique()
             dist_count = competition["district"].nunique()
             st.caption(f"전국 데이터 ({city_count}개 시/도, {dist_count}개 지역) — 강원특별자치도 제외 (API 미지원)")
+
+            # 도시 selectbox (ctx_city 연동 + 직접 변경 가능)
+            _all_cities_cp = sorted(competition["city"].dropna().unique().tolist())
+            _cp_default_idx = (
+                _all_cities_cp.index(_ctx_city_cp)
+                if _ctx_city_cp and _ctx_city_cp in _all_cities_cp
+                else 0
+            )
+            _sel_city_cp = st.selectbox(
+                "시/도 선택", ["전국"] + _all_cities_cp,
+                index=_cp_default_idx + 1 if _ctx_city_cp and _ctx_city_cp in _all_cities_cp else 0,
+                key="comp_city_sel",
+            )
+            if _sel_city_cp != "전국":
+                comp_view = comp_view[comp_view["city"] == _sel_city_cp]
         else:
             st.caption("서울 데이터 (25개 자치구)")
 
@@ -1841,18 +1931,45 @@ with tab_competition:
             col1, col2 = st.columns([2, 1])
             with col1:
                 st.subheader(f"'{selected_inds}' 업종 지역별 밀도")
-                show_cols = (["city", "district"] if _is_national_comp else ["district"]) + ["store_count", "stores_per_10k"]
-                show_cols = [c for c in show_cols if c in filtered.columns]
-                st.dataframe(
-                    filtered[show_cols].rename(columns={
-                        "city": "시/도",
-                        "district": "시/군/구",
-                        "store_count": "점포 수",
-                        "stores_per_10k": "인구 1만명당 점포",
-                    }),
-                    use_container_width=True,
-                    hide_index=True,
-                )
+                if not filtered.empty:
+                    _top_comp = filtered.head(20).copy()
+                    if _is_national_comp and "city" in _top_comp.columns:
+                        _top_comp["label"] = _top_comp["city"].str[:2] + " " + _top_comp["district"]
+                    else:
+                        _top_comp["label"] = _top_comp["district"]
+                    _top_comp = _top_comp.sort_values("stores_per_10k")
+                    _mx_s = _top_comp["stores_per_10k"].max() or 1
+                    _colors_comp = [
+                        f"rgb({int(220 - 180 * v / _mx_s)},{int(38 + 90 * v / _mx_s)},{int(38 + 90 * v / _mx_s)})"
+                        for v in _top_comp["stores_per_10k"]
+                    ]
+                    fig_comp = go.Figure(go.Bar(
+                        x=_top_comp["stores_per_10k"],
+                        y=_top_comp["label"],
+                        orientation="h",
+                        marker_color=_colors_comp,
+                        text=_top_comp["stores_per_10k"].apply(lambda v: f"{v:.1f}"),
+                        textposition="outside",
+                    ))
+                    fig_comp.update_layout(
+                        height=max(350, len(_top_comp) * 26),
+                        margin={"t": 10, "b": 0, "l": 0, "r": 60},
+                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                        xaxis={"title": "인구 1만명당 점포 수"},
+                    )
+                    st.plotly_chart(fig_comp, use_container_width=True)
+                    if len(filtered) > 20:
+                        st.caption(f"상위 20개 지역 표시 (전체 {len(filtered)}개)")
+                    with st.expander("상세 수치 보기"):
+                        show_cols = (["city", "district"] if _is_national_comp else ["district"]) + ["store_count", "stores_per_10k"]
+                        show_cols = [c for c in show_cols if c in filtered.columns]
+                        st.dataframe(
+                            filtered[show_cols].rename(columns={
+                                "city": "시/도", "district": "시/군/구",
+                                "store_count": "점포 수", "stores_per_10k": "인구 1만명당 점포",
+                            }),
+                            use_container_width=True, hide_index=True,
+                        )
 
             with col2:
                 st.subheader("해석")
@@ -1871,7 +1988,7 @@ with tab_competition:
                         """
                     )
 
-            # 전체 업종 비교 히트맵 대용 테이블
+            # 전체 업종 비교 히트맵
             st.subheader("전체 업종 × 지역 점포 밀도 (인구 1만명당)")
             pivot_col = "district"
             if _is_national_comp and not _ctx_city_cp:
@@ -1879,7 +1996,25 @@ with tab_competition:
             pivot = comp_view.pivot_table(
                 index="inds_group", columns=pivot_col, values="stores_per_10k", fill_value=0
             ).round(1)
-            st.dataframe(pivot, use_container_width=True)
+            if not pivot.empty:
+                import plotly.express as _pxhm
+                fig_hm = _pxhm.imshow(
+                    pivot,
+                    labels={"x": "지역", "y": "업종", "color": "점포/1만명"},
+                    color_continuous_scale="RdYlGn_r",
+                    aspect="auto",
+                    text_auto=".1f",
+                )
+                fig_hm.update_layout(
+                    height=max(320, len(pivot) * 40),
+                    margin={"t": 20, "b": 60, "l": 0, "r": 0},
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    coloraxis_colorbar=dict(title="점포/1만명", len=0.8),
+                    xaxis_tickangle=-45,
+                )
+                fig_hm.update_traces(textfont_size=9)
+                st.plotly_chart(fig_hm, use_container_width=True)
+                st.caption("빨간색 = 경쟁 포화 / 초록색 = 경쟁 여유. 시/도를 선택하면 지역이 좁혀져 더 잘 보입니다.")
 
             st.markdown("---")
             st.subheader("공공수요 vs 경쟁 포화도 비교")
@@ -1923,14 +2058,51 @@ with tab_competition:
                     merged = pd.merge(cat_bids, cat_comp, on=merge_key, how="left").fillna(0)
                     merged["수요↑/경쟁↓ 점수"] = (merged["opportunity_score"] - merged["stores_per_10k"] / 10).round(2)
                     merged = merged.sort_values("수요↑/경쟁↓ 점수", ascending=False)
-                    rename_map = {
-                        "city": "시/도", "district": "시/군/구",
-                        "bid_count": "공공수요 공고수",
-                        "opportunity_score": "공공수요 점수",
-                        "stores_per_10k": "경쟁 밀도(1만명당)",
-                    }
-                    st.dataframe(merged.rename(columns=rename_map), use_container_width=True, hide_index=True)
-                    st.caption("'수요↑/경쟁↓ 점수'가 높을수록 공공수요 대비 경쟁이 낮은 유망 지역입니다.")
+                    if _is_national_comp and "city" in merged.columns:
+                        merged["지역"] = merged["city"].str[:2] + " " + merged["district"]
+                    else:
+                        merged["지역"] = merged["district"]
+                    fig_vs = px.scatter(
+                        merged,
+                        x="opportunity_score",
+                        y="stores_per_10k",
+                        size="bid_count",
+                        text="지역",
+                        color="수요↑/경쟁↓ 점수",
+                        color_continuous_scale="RdYlGn",
+                        labels={
+                            "opportunity_score": "공공수요 점수",
+                            "stores_per_10k": "경쟁 밀도 (점포/1만명)",
+                            "bid_count": "공고수",
+                        },
+                        title=f"'{sel_cat}' 공공수요 vs 경쟁 포화도",
+                    )
+                    fig_vs.update_traces(textposition="top center", textfont_size=9)
+                    # 우하단 = 수요 높고 경쟁 낮음 → 유망
+                    _opp_med = merged["opportunity_score"].median()
+                    _str_med = merged["stores_per_10k"].median()
+                    fig_vs.add_shape(type="rect",
+                        x0=_opp_med, y0=0,
+                        x1=merged["opportunity_score"].max() * 1.05, y1=_str_med,
+                        fillcolor="rgba(22,163,74,0.06)", line=dict(color="#16A34A", width=1, dash="dot"))
+                    fig_vs.add_annotation(
+                        x=merged["opportunity_score"].max(), y=0,
+                        text="유망 지역", showarrow=False, font=dict(color="#16A34A", size=11), yanchor="bottom")
+                    fig_vs.update_layout(
+                        height=500, margin={"t": 40, "b": 0},
+                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                        coloraxis_showscale=False,
+                    )
+                    st.plotly_chart(fig_vs, use_container_width=True)
+                    st.caption("우하단 (수요↑ 경쟁↓) = 유망 지역. 원 크기 = 공고 수.")
+                    with st.expander("상세 수치 보기"):
+                        rename_map = {
+                            "city": "시/도", "district": "시/군/구",
+                            "bid_count": "공공수요 공고수",
+                            "opportunity_score": "공공수요 점수",
+                            "stores_per_10k": "경쟁 밀도(1만명당)",
+                        }
+                        st.dataframe(merged.rename(columns=rename_map), use_container_width=True, hide_index=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_logistics:

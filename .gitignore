@@ -23,6 +23,13 @@ my.txt
 *.hwpx
 *.bak
 
+# 이미지/미디어 파일
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+
 /old/*
 
 # ML 모델 바이너리 (로컬 생성, train_classifier.py로 재현 가능)

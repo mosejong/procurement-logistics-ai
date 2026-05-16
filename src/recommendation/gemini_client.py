@@ -138,7 +138,7 @@ def build_demand_summary(ctx: DemandContext) -> str:
         for attempt in range(3):
             try:
                 response = client.models.generate_content(
-                    model="models/gemini-3.1-flash-lite-preview",
+                    model="gemini-3.1-flash-lite",
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         system_instruction=_SYSTEM_INSTRUCTION,
@@ -231,7 +231,7 @@ def build_shortage_verdict(ctx: ShortageContext) -> str:
         for attempt in range(3):
             try:
                 response = client.models.generate_content(
-                    model="models/gemini-3.1-flash-lite-preview",
+                    model="gemini-3.1-flash-lite",
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         system_instruction=_SHORTAGE_SYSTEM,
@@ -327,7 +327,7 @@ def build_overdemand_verdict(ctx: OverdemandContext) -> str:
         for attempt in range(3):
             try:
                 response = client.models.generate_content(
-                    model="models/gemini-3.1-flash-lite-preview",
+                    model="gemini-3.1-flash-lite",
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         system_instruction=_OVERDEMAND_SYSTEM,
@@ -427,7 +427,7 @@ def build_hub_strategy(ctx: HubStrategyContext) -> str:
         for attempt in range(3):
             try:
                 response = client.models.generate_content(
-                    model="models/gemini-3.1-flash-lite-preview",
+                    model="gemini-3.1-flash-lite",
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         system_instruction=_HUB_SYSTEM,
