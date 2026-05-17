@@ -2061,11 +2061,10 @@ with tab_compare:
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_consumer:
     _ctx_city_cs = st.session_state.get("ctx_city")
-    # ctx_city 변경 시 city/district 위젯 캐시 초기화
+    # ctx_city 변경 시 district 캐시만 초기화 (city는 아래에서 명시적 setValue)
     if st.session_state.get("_consumer_last_ctx") != _ctx_city_cs:
         st.session_state["_consumer_last_ctx"] = _ctx_city_cs
-        for _k in ("fit_city", "fit_dist"):
-            st.session_state.pop(_k, None)
+        st.session_state.pop("fit_dist", None)
     st.header("자치구별 품목군 소비층 적합도")
     st.caption(
         "행정안전부 연령별 인구 데이터 기반. 각 품목군의 주소비층(예: 의료/복지 → 60대 이상) 비중이 "
@@ -2085,15 +2084,35 @@ with tab_consumer:
             if _is_national_fit:
                 _fit_cities = sorted(consumer_fit["city"].dropna().unique().tolist())
                 _fit_city_labels = [CITY_LABELS.get(c, c) for c in _fit_cities]
-                _fit_default_label = CITY_LABELS.get(_ctx_city_cs, _ctx_city_cs) if _ctx_city_cs and _ctx_city_cs in _fit_cities else _fit_city_labels[0]
-                _fit_city_default = _fit_city_labels.index(_fit_default_label) if _fit_default_label in _fit_city_labels else 0
+                # ctx_city 변경 시 city 위젯 강제 동기화
+                if st.session_state.get("_fit_city_sync") != _ctx_city_cs:
+                    st.session_state["_fit_city_sync"] = _ctx_city_cs
+                    if _ctx_city_cs and _ctx_city_cs in _fit_cities:
+                        _lbl = CITY_LABELS.get(_ctx_city_cs, _ctx_city_cs)
+                        if _lbl in _fit_city_labels:
+                            st.session_state["fit_city"] = _lbl
+                    else:
+                        st.session_state.pop("fit_city", None)
                 _fit_col1, _fit_col2 = st.columns(2)
                 with _fit_col1:
-                    sel_fit_city_label = st.selectbox("시/도 선택", _fit_city_labels, index=_fit_city_default, key="fit_city")
+                    sel_fit_city_label = st.selectbox("시/도 선택", _fit_city_labels, key="fit_city")
                 sel_fit_city = _fit_cities[_fit_city_labels.index(sel_fit_city_label)]
+                # city 변경 시 district 캐시 초기화
+                if st.session_state.get("_fit_prev_city") != sel_fit_city_label:
+                    st.session_state["_fit_prev_city"] = sel_fit_city_label
+                    st.session_state.pop("fit_dist", None)
                 _fit_for_city = consumer_fit[consumer_fit["city"] == sel_fit_city]
                 with _fit_col2:
                     districts_fit = sorted(_fit_for_city["district"].dropna().unique().tolist())
+                    # ctx_district 변경 시 district 위젯 강제 동기화
+                    _ctx_dist_cs = st.session_state.get("ctx_district")
+                    if (
+                        _ctx_dist_cs
+                        and _ctx_dist_cs in districts_fit
+                        and st.session_state.get("_fit_dist_sync") != _ctx_dist_cs
+                    ):
+                        st.session_state["_fit_dist_sync"] = _ctx_dist_cs
+                        st.session_state["fit_dist"] = _ctx_dist_cs
                     sel_dist = st.selectbox("자치구를 선택하세요", districts_fit, key="fit_dist")
             else:
                 sel_fit_city = None
@@ -2259,16 +2278,17 @@ with tab_competition:
             dist_count = competition["district"].nunique()
             st.caption(f"전국 데이터 ({city_count}개 시/도, {dist_count}개 지역) — 강원특별자치도 제외 (API 미지원)")
 
-            # 도시 selectbox (ctx_city 연동 + 직접 변경 가능)
+            # 도시 selectbox (ctx_city 연동)
             _all_cities_cp = sorted(competition["city"].dropna().unique().tolist())
-            _cp_default_idx = (
-                _all_cities_cp.index(_ctx_city_cp)
-                if _ctx_city_cp and _ctx_city_cp in _all_cities_cp
-                else 0
-            )
+            # ctx_city 변경 시 city 위젯 강제 동기화
+            if st.session_state.get("_comp_last_ctx") != _ctx_city_cp:
+                st.session_state["_comp_last_ctx"] = _ctx_city_cp
+                if _ctx_city_cp and _ctx_city_cp in _all_cities_cp:
+                    st.session_state["comp_city_sel"] = _ctx_city_cp
+                else:
+                    st.session_state.pop("comp_city_sel", None)
             _sel_city_cp = st.selectbox(
                 "시/도 선택", ["전국"] + _all_cities_cp,
-                index=_cp_default_idx + 1 if _ctx_city_cp and _ctx_city_cp in _all_cities_cp else 0,
                 key="comp_city_sel",
             )
             if _sel_city_cp != "전국":
