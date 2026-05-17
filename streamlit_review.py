@@ -455,11 +455,11 @@ with tab_map:
             _region_opts,
             index=_region_idx,
             label_visibility="collapsed",
-            help="지역 선택 시 우측 패널이 업데이트됩니다. 시군구 분석은 패널의 버튼을 눌러주세요.",
+            help="지역 선택 시 시군구 지도가 바로 표시됩니다. '전국' 선택 시 전체 시도 지도로 돌아갑니다.",
         )
         st.session_state["map_city_val"] = selected_region
 
-        # ── 점수 산정 근거 ────────────────────────────────────────────────────
+        # ── 점수 산정 근거 ─────────────────────────────────────────────────────
         st.markdown("---")
         st.markdown(
             '<p style="font-size:11px;font-weight:700;color:#475569;margin:0 0 6px 0;">📐 점수 산정 근거</p>',
@@ -484,13 +484,19 @@ with tab_map:
     _selected_city: str | None = None if selected_region == "전국" else selected_region
     _drilldown_city: str | None = st.session_state.get("map_drilldown_city")
 
-    # map_selected_city → ctx_city 전역 동기화 (매 rerun마다)
-    st.session_state["ctx_city"] = _selected_city
-
-    # 선택 시도가 바뀌면 드릴다운 해제
-    if _drilldown_city is not None and _selected_city != _drilldown_city:
+    # 드롭다운 선택 → 즉시 드릴다운 (시군구 지도 표시)
+    if _selected_city and _drilldown_city != _selected_city:
+        st.session_state["map_drilldown_city"] = _selected_city
+        st.rerun()
+    elif not _selected_city and _drilldown_city is not None:
         st.session_state["map_drilldown_city"] = None
-        _drilldown_city = None
+        st.rerun()
+
+    # 최신 drilldown 도시로 동기화
+    _drilldown_city = st.session_state.get("map_drilldown_city")
+
+    # ctx_city 전역 동기화 (drilldown 우선, 없으면 dropdown)
+    st.session_state["ctx_city"] = _drilldown_city or _selected_city
 
     # ── 전국 시도별 집계 ──────────────────────────────────────────────────────
     if not map_summary.empty:
@@ -669,7 +675,7 @@ with tab_map:
                     if _clicked and _clicked in _city_list:
                         st.session_state["map_city_val"] = _clicked
                         st.rerun()
-                st.caption("시도를 클릭하면 우측 패널이 업데이트됩니다")
+                st.caption("시도를 클릭하거나 좌측 드롭다운에서 선택하면 시군구 지도로 이동합니다")
             else:
                 st.info("선택한 품목군의 전국 데이터가 없습니다.")
 
@@ -679,6 +685,7 @@ with tab_map:
             with _back_col:
                 if st.button("← 전국"):
                     st.session_state["map_drilldown_city"] = None
+                    st.session_state["map_city_val"] = "전국"
                     st.rerun()
             with _title_col:
                 st.markdown(f"**{_drilldown_city}** — {selected_cat} / {selected_metric_label}")
@@ -1018,37 +1025,49 @@ div[data-testid="stHorizontalBlock"] .stButton > button {
     line-height: 1.4 !important;
 }
 </style>""", unsafe_allow_html=True)
+    # ── 지역 선택 시 안내 배너 ───────────────────────────────────────────────
+    _nav_city = _drilldown_city or _selected_city
+    if _nav_city:
+        _city_label = CITY_LABELS.get(_nav_city, _nav_city)
+        st.success(f"**{_city_label}** 선택됨 — 아래 버튼으로 상세 분석 탭으로 이동하세요 ↓", icon="✅")
+
     _nb1, _nb2, _nb3, _nb4 = st.columns(4)
+    _city_suffix = f"\n({CITY_LABELS.get(_nav_city, _nav_city)})" if _nav_city else ""
     with _nb1:
-        if st.button("📍\n지역 분석", use_container_width=True, key="pbtn_region"):
-            if _selected_city:
-                st.session_state["ctx_city"] = _selected_city
+        if st.button(f"📍 지역 분석{_city_suffix}", use_container_width=True, key="pbtn_region"):
+            if _nav_city:
+                st.session_state["ctx_city"] = _nav_city
             st.session_state["ctx_cat"] = selected_cat
             st.session_state["_nav_tab_idx"] = 2
             st.rerun()
     with _nb2:
-        if st.button("👥\n소비층 적합도", use_container_width=True, key="pbtn_consumer"):
-            if _selected_city:
-                st.session_state["ctx_city"] = _selected_city
+        if st.button(f"👥 소비층 적합도{_city_suffix}", use_container_width=True, key="pbtn_consumer"):
+            if _nav_city:
+                st.session_state["ctx_city"] = _nav_city
             st.session_state["ctx_cat"] = selected_cat
             st.session_state["_nav_tab_idx"] = 5
             st.rerun()
     with _nb3:
-        if st.button("🏪\n경쟁 분석", use_container_width=True, key="pbtn_compete"):
-            if _selected_city:
-                st.session_state["ctx_city"] = _selected_city
+        if st.button(f"🏪 경쟁 분석{_city_suffix}", use_container_width=True, key="pbtn_compete"):
+            if _nav_city:
+                st.session_state["ctx_city"] = _nav_city
             st.session_state["ctx_cat"] = selected_cat
             st.session_state["_nav_tab_idx"] = 6
             st.rerun()
     with _nb4:
-        if st.button("🚚\n물류 거점 분석", use_container_width=True, key="pbtn_logistics"):
-            if _selected_city:
-                st.session_state["ctx_city"] = _selected_city
+        if st.button(f"🚚 물류 거점 분석{_city_suffix}", use_container_width=True, key="pbtn_logistics"):
+            if _nav_city:
+                st.session_state["ctx_city"] = _nav_city
             st.session_state["ctx_cat"] = selected_cat
             st.session_state["_nav_tab_idx"] = 7
             st.rerun()
 
-    # ── 하단: Top 품목군 | 연도별 추이 | 물류 거점 추천 ──────────────────────
+    # ── 하단: 전국 집계 요약 ─────────────────────────────────────────────────
+    st.markdown(
+        "<p style='font-size:12px;color:#94A3B8;margin:8px 0 4px 0'>"
+        "📊 전국 집계 (지역·품목 필터 무관 — 100,083건 기준)</p>",
+        unsafe_allow_html=True,
+    )
     bc1, bc2, bc3 = st.columns(3)
 
     with bc1:
