@@ -1,0 +1,9 @@
+{
+  "total_bids": 100663,
+  "cities": 17,
+  "districts": 205,
+  "item_categories": 19,
+  "api_sources": 4,
+  "collected_period": "2024-04 ~",
+  "note": "bid_cleaned_national.csv 기준 (100663행), 집계는 opportunity_matrix_national.csv 기준"
+}

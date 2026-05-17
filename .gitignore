@@ -18,6 +18,7 @@ logs/*
 !outputs/tables/*.csv
 !data/processed/seoul_bid_classified.csv
 !data/processed/seoul_bid_cleaned.csv
+!data/processed/metadata.json
 
 my.txt
 *.hwpx

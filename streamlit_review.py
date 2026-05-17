@@ -42,6 +42,7 @@ CLEANED_PATH = PROCESSED_DIR / "bid_cleaned_national.csv"
 if not CLEANED_PATH.exists():
     CLEANED_PATH = PROCESSED_DIR / "seoul_bid_cleaned.csv"
 HEATMAP_PATH = FIGURES_DIR / "seoul_opportunity_heatmap.png"
+METADATA_PATH = PROCESSED_DIR / "metadata.json"
 REPORT_PATH = REPORTS_DIR / "national_summary.md"
 if not REPORT_PATH.exists():
     REPORT_PATH = REPORTS_DIR / "seoul_sample_summary.md"
@@ -317,6 +318,15 @@ _is_national_comp = "city" in competition.columns and not competition.empty
 consumer_fit = load_csv(CONSUMER_FIT_PATH)
 classified_all = load_csv(CLASSIFIED_PATH)
 cleaned_all = load_csv(CLEANED_PATH)
+
+# 수집 규모 메타데이터 (raw csv는 git 용량 초과로 미포함)
+import json as _json
+_meta: dict = {}
+if METADATA_PATH.exists():
+    try:
+        _meta = _json.loads(METADATA_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        _meta = {}
 
 if features_all.empty:
     features_all = matrix_all.copy()
@@ -1426,21 +1436,19 @@ with tab_overview:
     st.subheader("데이터 규모")
     _ov_c1, _ov_c2, _ov_c3, _ov_c4, _ov_c5 = st.columns(5)
     with _ov_c1:
-        # raw cleaned csv는 용량 초과로 git 미포함 → 수집 총건수 고정값 사용
-        _ov_total = 100083
+        _ov_total = _meta.get("total_bids") or (len(cleaned_all) if not cleaned_all.empty else 0)
         st.metric("수집 공고", f"{_ov_total:,}건")
     with _ov_c2:
-        _ov_city = (matrix_all["city"].nunique() if not matrix_all.empty and "city" in matrix_all.columns else 17)
+        _ov_city = _meta.get("cities") or (matrix_all["city"].nunique() if not matrix_all.empty and "city" in matrix_all.columns else 0)
         st.metric("시/도", f"{_ov_city}개")
     with _ov_c3:
-        _ov_dist = (matrix_all["district"].nunique() if not matrix_all.empty and "district" in matrix_all.columns else 220)
+        _ov_dist = _meta.get("districts") or (matrix_all["district"].nunique() if not matrix_all.empty and "district" in matrix_all.columns else 0)
         st.metric("시·군·구", f"{_ov_dist}개")
     with _ov_c4:
-        _ov_cat = (matrix_all["item_category"].nunique() if not matrix_all.empty and "item_category" in matrix_all.columns
-                   else features["item_category"].nunique() if not features.empty else 0)
+        _ov_cat = _meta.get("item_categories") or (matrix_all["item_category"].nunique() if not matrix_all.empty and "item_category" in matrix_all.columns else 0)
         st.metric("품목군", f"{_ov_cat}종")
     with _ov_c5:
-        st.metric("연계 API", "4개 기관")
+        st.metric("연계 API", f"{_meta.get('api_sources', 4)}개 기관")
 
     st.caption(f"조달청 {_ov_total:,}건 (수집 기간: {TREND_START_YM} ~ ) · 행안부 인구 · 소상공인 상권정보 · KOSIS 신생기업 생존율")
 
