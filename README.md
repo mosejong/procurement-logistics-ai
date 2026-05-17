@@ -42,8 +42,9 @@ Gemini API (gemini_client.py) — AI 판정 4종
   ④ 물류 거점: 전국 수요 분포 기반 1·2·3티어 거점 전략
 
 Streamlit 대시보드 (streamlit_review.py) — 10개 탭
-  🌏 전국 지도 → 🗺️ 지역 분석 → 📦 품목 분석 → 👥 소비층 적합도
-  🏪 경쟁 분석 → 🚚 물류 거점 분석 → ⚖️ 자치구 비교 → 🔍 사업 유형 검색
+  🌏 전국 지도 → 🔍 사업 유형 검색 → 🗺️ 지역 분석 → 📦 품목 분석
+  ⚖️ 자치구 비교 → 👥 소비층 적합도 → 🏪 경쟁 분석 → 🚚 물류 거점 분석
+  🔬 분석 근거 데이터 → 📋 프로젝트 개요
 ```
 
 ---
@@ -148,8 +149,8 @@ outputs/tables/
   national_consumer_fit.csv         소비층 적합도 (242개 지역)
   national_competition_matrix.csv   경쟁 포화도 (253개 지역)
   map_item_city_summary.csv         지도 탭용 선처리 집계 (adjusted_score 포함)
-streamlit_review.py     메인 대시보드
-check.md                검수 기록 (1~9차)
+streamlit_review.py     메인 대시보드 (10개 탭)
+check.md                검수 기록 (12차)
 ```
 
 ---
@@ -173,7 +174,7 @@ check.md                검수 기록 (1~9차)
 |---|---|
 | 민간 수요 미반영 | 공공조달(B2G) 관점만. B2C 업종은 상권 데이터가 더 적합 |
 | 데이터부족 비중 | 지역·품목 조합 중 10건 미만 구간 다수 (보수적 정책의 결과) |
-| Gemini preview 모델 | `gemini-3.1-flash-lite-preview` — API 실패 시 수치 기반 폴백 자동 대체 |
+| Gemini 모델 | `gemini-3.1-flash-lite` (정식 버전) — API 실패 시 수치 기반 폴백 자동 대체 |
 | 소비층 적합도 | 시/도별 연령 분포 기반 추정값 (실측 시군구 연령 데이터 미확보) |
 
 ---
