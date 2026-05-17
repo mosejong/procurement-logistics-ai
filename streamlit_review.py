@@ -1015,6 +1015,15 @@ with tab_map:
                         _metrics_dd.append(("경쟁도", _comp100_d, COLOR_BAD, True))
                     _metrics_dd.append(("물류 점수", _safe(_dr.get("hub_score")), COLOR_GOOD, False))
                     st.plotly_chart(_make_panel_gauges(_metrics_dd), use_container_width=True, key="gauge_dd")
+                    st.markdown(
+                        "<div style='font-size:10px;color:#64748B;line-height:1.6;margin:-4px 0 4px 0'>"
+                        "① <b>기회점수</b>: 공고수·금액·최근성·경쟁도 종합 &nbsp;"
+                        "② <b>소비층 적합도</b>: 주소비 연령층 매칭 (0~100) &nbsp;"
+                        "③ <b>경쟁도</b>: 개방입찰 비율 — 높을수록 신규진입 유리 &nbsp;"
+                        "④ <b>물류점수</b>: 납품 수요 집중도 (0~100)"
+                        "</div>",
+                        unsafe_allow_html=True,
+                    )
 
                     st.divider()
                     if st.button("지역 분석 탭에서 보기", use_container_width=True):
@@ -1507,11 +1516,6 @@ Gemini AI (gemini-3.1-flash-lite) — 판정 4종
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_region:
     _ctx_city_r = st.session_state.get("ctx_city")
-    # ctx_city 변경 시 city/district 위젯 캐시 초기화 → 올바른 기본값 적용
-    if st.session_state.get("_region_last_ctx") != _ctx_city_r:
-        st.session_state["_region_last_ctx"] = _ctx_city_r
-        for _k in ("region_tab_city", "region_tab_district"):
-            st.session_state.pop(_k, None)
     st.header("지역 선택 → 추천 품목")
 
     if features_all.empty:
@@ -1520,6 +1524,18 @@ with tab_region:
         # ctx_city 기준 필터 (전국 지도 탭과 연동)
         _tab_cities = sorted(features_all["city"].dropna().unique().tolist()) if "city" in features_all.columns else []
         _tab_city_labels = [CITY_LABELS.get(c, c) for c in _tab_cities]
+
+        # ctx_city 변경 시 city 위젯 강제 동기화 (pop+index 방식 불안정 → 직접 setValue)
+        if st.session_state.get("_region_last_ctx") != _ctx_city_r:
+            st.session_state["_region_last_ctx"] = _ctx_city_r
+            st.session_state.pop("region_tab_district", None)
+            if _ctx_city_r and _ctx_city_r in _tab_cities:
+                _lbl_to_set = CITY_LABELS.get(_ctx_city_r, _ctx_city_r)
+                if _lbl_to_set in _tab_city_labels:
+                    st.session_state["region_tab_city"] = _lbl_to_set
+            else:
+                st.session_state.pop("region_tab_city", None)
+
         _ctx_label_r = CITY_LABELS.get(_ctx_city_r, _ctx_city_r) if _ctx_city_r and _ctx_city_r in _tab_cities else (_tab_city_labels[0] if _tab_city_labels else "")
         _default_city_idx = _tab_city_labels.index(_ctx_label_r) if _ctx_label_r in _tab_city_labels else 0
         col_f1, col_f2 = st.columns(2)
