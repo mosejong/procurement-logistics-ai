@@ -1426,15 +1426,14 @@ with tab_overview:
     st.subheader("데이터 규모")
     _ov_c1, _ov_c2, _ov_c3, _ov_c4, _ov_c5 = st.columns(5)
     with _ov_c1:
-        _ov_total = len(cleaned) if not cleaned.empty else (len(matrix_all) if not matrix_all.empty else 0)
+        # raw cleaned csv는 용량 초과로 git 미포함 → 수집 총건수 고정값 사용
+        _ov_total = 100083
         st.metric("수집 공고", f"{_ov_total:,}건")
     with _ov_c2:
-        _ov_city = (cleaned["city"].nunique() if not cleaned.empty and "city" in cleaned.columns
-                    else matrix_all["city"].nunique() if not matrix_all.empty and "city" in matrix_all.columns else 0)
+        _ov_city = (matrix_all["city"].nunique() if not matrix_all.empty and "city" in matrix_all.columns else 17)
         st.metric("시/도", f"{_ov_city}개")
     with _ov_c3:
-        _ov_dist = (cleaned["district"].nunique() if not cleaned.empty and "district" in cleaned.columns
-                    else matrix_all["district"].nunique() if not matrix_all.empty and "district" in matrix_all.columns else 0)
+        _ov_dist = (matrix_all["district"].nunique() if not matrix_all.empty and "district" in matrix_all.columns else 220)
         st.metric("시·군·구", f"{_ov_dist}개")
     with _ov_c4:
         _ov_cat = (matrix_all["item_category"].nunique() if not matrix_all.empty and "item_category" in matrix_all.columns
