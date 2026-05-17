@@ -2058,6 +2058,39 @@ with tab_compare:
             "점수 자체보다 상대적 비교 참고 자료로 활용하세요."
         )
 
+        # 품목군별 공고 비율 파이차트
+        st.subheader("품목군별 공고 비율")
+        _pie_col_a, _pie_col_b = st.columns(2)
+
+        def _make_pie(data: pd.DataFrame, label: str):
+            if data.empty or "bid_count" not in data.columns:
+                st.info(f"{label} 데이터 없음")
+                return
+            _d = data[data["bid_count"] > 0][["bid_count"]].reset_index()
+            if _d.empty:
+                st.info(f"{label} 공고 없음")
+                return
+            fig = go.Figure(go.Pie(
+                labels=_d["item_category"],
+                values=_d["bid_count"],
+                hole=0.35,
+                textinfo="percent",
+                hovertemplate="%{label}<br>%{value}건 (%{percent})<extra></extra>",
+            ))
+            fig.update_layout(
+                title=dict(text=label, x=0.5, font=dict(size=14)),
+                margin={"t": 40, "b": 10, "l": 0, "r": 0},
+                height=320,
+                paper_bgcolor="rgba(0,0,0,0)",
+                legend=dict(font=dict(size=11)),
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        with _pie_col_a:
+            _make_pie(data_a, dist_a)
+        with _pie_col_b:
+            _make_pie(data_b, dist_b)
+
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_consumer:
     _ctx_city_cs = st.session_state.get("ctx_city")
