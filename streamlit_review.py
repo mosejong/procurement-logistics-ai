@@ -951,8 +951,13 @@ div[data-testid="stHorizontalBlock"] .stButton > button {
             )
             st.markdown(f"**월별 공고 추이**  <span style='font-size:11px;color:#94A3B8;'>수집 기간: {_period_label}</span>", unsafe_allow_html=True)
             if not trend.empty:
-                # 최근 18개월만 표시 (초기 저수집 기간 제외)
-                _trend_recent = trend.tail(18) if len(trend) > 18 else trend
+                # 수집 시점 쏠림 방지: 직전 달까지만 표시 (이번 달 = 수집 중이라 급증)
+                import datetime as _dt_mod
+                _cutoff = (_dt_mod.date.today().replace(day=1) - _dt_mod.timedelta(days=1)).strftime("%Y-%m")
+                _trend_cut = trend[trend["연월"] <= _cutoff]
+                _trend_recent = _trend_cut.tail(18) if len(_trend_cut) > 18 else _trend_cut
+                if _trend_recent.empty:
+                    _trend_recent = trend.tail(18)
                 fig_trend = px.bar(
                     _trend_recent, x="연월", y="공고 수",
                     labels={"연월": "", "공고 수": "공고 수"},
@@ -980,7 +985,14 @@ div[data-testid="stHorizontalBlock"] .stButton > button {
                 .sort_values("score", ascending=False)
                 .head(8)
             )
-            hub_df["label"] = hub_df["city"].str[:2] + " " + hub_df["district"]
+            # district가 city와 같거나 포함된 경우(광역시 등) city만 표시
+            def _hub_label(row):
+                city_short = row["city"][:2]
+                dist = row["district"]
+                if dist in row["city"] or row["city"] in dist or dist == row["city"][:len(dist)]:
+                    return row["city"]
+                return f"{city_short} {dist}"
+            hub_df["label"] = hub_df.apply(_hub_label, axis=1)
             hub_df["score"] = hub_df["score"].round(1)
             fig_hub = px.bar(
                 hub_df, x="score", y="label", orientation="h",
@@ -2089,13 +2101,24 @@ with tab_competition:
                     )
 
             # 전체 업종 비교 히트맵
-            st.subheader("전체 업종 × 지역 점포 밀도 (인구 1만명당)")
-            pivot_col = "district"
-            if _is_national_comp and not _ctx_city_cp:
-                st.caption("지역이 많아 특정 시/도를 선택하면 더 보기 좋습니다.")
-            pivot = comp_view.pivot_table(
-                index="inds_group", columns=pivot_col, values="stores_per_10k", fill_value=0
-            ).round(1)
+            _hm_city_sel = st.session_state.get("comp_city_sel", "전국")
+            _hm_national = _is_national_comp and (_hm_city_sel == "전국")
+
+            if _hm_national:
+                st.subheader("전체 업종 × 시도별 점포 밀도 (인구 1만명당)")
+                st.caption("시/도를 선택하면 해당 지역 시군구 단위로 좁혀서 볼 수 있습니다.")
+                # 전국 모드: 시도 단위 평균 (253개 지역 → 16개 시도)
+                _hm_view = competition.copy() if "city" in competition.columns else comp_view.copy()
+                pivot = _hm_view.pivot_table(
+                    index="inds_group", columns="city", values="stores_per_10k",
+                    aggfunc="mean", fill_value=0,
+                ).round(1)
+            else:
+                st.subheader(f"전체 업종 × 시군구별 점포 밀도 ({_hm_city_sel if not _hm_national else '전국'})")
+                pivot = comp_view.pivot_table(
+                    index="inds_group", columns="district", values="stores_per_10k", fill_value=0,
+                ).round(1)
+
             if not pivot.empty:
                 import plotly.express as _pxhm
                 fig_hm = _pxhm.imshow(
@@ -2105,16 +2128,17 @@ with tab_competition:
                     aspect="auto",
                     text_auto=".1f",
                 )
+                _hm_col_count = len(pivot.columns)
                 fig_hm.update_layout(
-                    height=max(320, len(pivot) * 40),
-                    margin={"t": 20, "b": 60, "l": 0, "r": 0},
+                    height=max(320, len(pivot) * 42),
+                    margin={"t": 20, "b": max(60, _hm_col_count * 5), "l": 0, "r": 0},
                     paper_bgcolor="rgba(0,0,0,0)",
                     coloraxis_colorbar=dict(title="점포/1만명", len=0.8),
                     xaxis_tickangle=-45,
                 )
-                fig_hm.update_traces(textfont_size=9)
+                fig_hm.update_traces(textfont_size=10 if _hm_col_count <= 20 else 8)
                 st.plotly_chart(fig_hm, use_container_width=True)
-                st.caption("빨간색 = 경쟁 포화 / 초록색 = 경쟁 여유. 시/도를 선택하면 지역이 좁혀져 더 잘 보입니다.")
+                st.caption("빨간색 = 경쟁 포화 / 초록색 = 경쟁 여유.")
 
             st.markdown("---")
             st.subheader("공공수요 vs 경쟁 포화도 비교")
