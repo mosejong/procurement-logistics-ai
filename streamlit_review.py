@@ -14,7 +14,7 @@ from plotly.subplots import make_subplots
 import streamlit as st
 import streamlit.components.v1 as components
 
-from src.config.regions import CITY_LABELS, REGIONS
+from src.config.regions import CITY_LABELS, REGIONS, normalize_city_name
 from src.recommendation.business_type_map import search_business_type, suggest_similar
 
 
@@ -154,7 +154,11 @@ def get_sido_summary(df: pd.DataFrame) -> pd.DataFrame:
 def load_csv(path: Path) -> pd.DataFrame:
     if not path.exists():
         return pd.DataFrame()
-    return pd.read_csv(path, encoding="utf-8-sig")
+    df = pd.read_csv(path, encoding="utf-8-sig")
+    # city 컬럼이 있으면 REGIONS 정식 키로 정규화 (전북특별자치도→전라북도 등)
+    if "city" in df.columns:
+        df["city"] = df["city"].apply(normalize_city_name)
+    return df
 
 
 # ── 공통 집계 캐시 함수 ───────────────────────────────────────────────────────

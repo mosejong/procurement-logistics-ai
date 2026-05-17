@@ -99,6 +99,40 @@ REGIONS: dict[str, list[str]] = {
     ],
 }
 
+# ── 시/도 명칭 정규화 ─────────────────────────────────────────────────────────
+# 행정명칭 변경 이력 및 외부 API/공공데이터가 혼용하는 이명 → REGIONS 정식 키
+# 새로운 명칭 변경이 생기면 이 dict 하나만 수정하면 됩니다.
+CITY_NAME_ALIASES: dict[str, str] = {
+    # 전북: 2024-01-18 특별자치도 전환 (시도코드 45→52)
+    # 조달청 API·공공데이터·행안부 CSV가 신명칭 사용, REGIONS는 구명칭 유지
+    "전북특별자치도": "전라북도",
+    # 강원: 2023-06-11 특별자치도 전환 — REGIONS는 이미 신명칭으로 업데이트됨
+    # 혹여 구명칭이 외부 소스에 들어오는 경우 대비
+    "강원도": "강원특별자치도",
+    # 세종/제주 약칭 방어
+    "세종시": "세종특별자치시",
+    "제주도": "제주특별자치도",
+}
+
+
+def normalize_city_name(city: str) -> str:
+    """외부 데이터·API의 시/도명을 REGIONS 정식 키로 정규화합니다.
+
+    Examples:
+        normalize_city_name("전북특별자치도")  → "전라북도"
+        normalize_city_name("강원도")         → "강원특별자치도"
+        normalize_city_name("서울특별시")      → "서울특별시"  (변환 불필요)
+    """
+    return CITY_NAME_ALIASES.get(city, city)
+
+
+def is_known_city(city: str) -> bool:
+    """정규화 후 REGIONS에 존재하는 시/도인지 확인합니다."""
+    return normalize_city_name(city) in REGIONS
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+
 # 전국 모든 하위 지역 이름 집합 (중복 이름 존재 — "중구", "동구" 등)
 ALL_DISTRICT_NAMES: set[str] = {
     district

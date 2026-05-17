@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.config.regions import DISTRICT_CITY_MAP, REGIONS
+from src.config.regions import REGIONS, normalize_city_name
 
 DEFAULT_CSV = Path("202305_202604_주민등록인구및세대현황_월간.csv")
 OUT_PATH = Path("data/reference/national_district_population.csv")
@@ -47,14 +47,8 @@ def _parse_region_name(raw: str) -> tuple[str, str | None]:
 
 
 def _city_name_alias(raw_city: str) -> str:
-    """CSV의 시도명 → REGIONS 키로 정규화.
-    2024년 이후 법적 명칭이 변경된 시도 대응:
-      전북특별자치도(신) → 전라북도(REGIONS 키)
-    """
-    _alias = {
-        "전북특별자치도": "전라북도",
-    }
-    return _alias.get(raw_city, raw_city)
+    """CSV의 시도명 → REGIONS 키로 정규화. regions.normalize_city_name 위임."""
+    return normalize_city_name(raw_city)
 
 
 def build_population(csv_path: Path) -> pd.DataFrame:
