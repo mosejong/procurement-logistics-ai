@@ -55,6 +55,41 @@ _GEO_TO_DATA_CITY: dict[str, str] = {
     "전라북도": "전라북도",  # opportunity_matrix 기준
 }
 
+# ── 판정 임계값 상수 (비즈니스 로직 한 곳에서 관리) ──────────────────────────
+MIN_BID_DISTRICT = 5      # 시군구 드릴다운 "데이터부족" 판정 공고 건수
+MIN_BID_REGION = 10       # 지역 분석탭 "데이터부족" 판정 기준
+COMPETITION_WARN = 0.3    # 경쟁도 점수 "경쟁 주의" 상한
+CONSUMER_FIT_GOOD = 0.6   # 소비층 적합도 "소비층 적합" 하한
+HUB_SCORE_GOOD = 70       # 물류 거점 후보 점수 하한
+
+# ── opportunity_score 내부 가중치 (build_opportunity_matrix.py와 반드시 일치) ─
+W_CNT  = 0.40   # 공고수 점수 가중치
+W_AMT  = 0.25   # 금액 점수 가중치
+W_REC  = 0.15   # 최근성 점수 가중치
+W_COMP = 0.20   # 경쟁도 점수 가중치
+
+# ── 복합 점수 가중치 ─────────────────────────────────────────────────────────
+W_OPP   = 0.6   # 기회점수 가중치 (복합 추천점수)
+W_FIT   = 0.4   # 소비층 적합도 가중치 (복합 추천점수)
+W_HUB_BIDS = 0.50  # 물류 거점: 공고수
+W_HUB_AMT  = 0.30  # 물류 거점: 금액
+W_HUB_CAT  = 0.20  # 물류 거점: 품목 다양성
+
+# ── UI 표시 상수 ─────────────────────────────────────────────────────────────
+TOP_N_HUB       = 8    # 물류 거점 Top N
+TOP_N_ITEMS     = 8    # Top 품목군 N
+TOP_N_MAP       = 20   # 지도 드릴다운 / 경쟁분석 상위 표시 수
+RAW_PREVIEW     = 500  # 원천 데이터 미리보기 최대 행수
+TREND_START_YM  = "2024-04"  # 월별 추이 표시 시작 연월
+
+# ── 색상 상수 ────────────────────────────────────────────────────────────────
+COLOR_GOOD    = "#16A34A"   # 추천 / 긍정 (초록)
+COLOR_WARN    = "#F59E0B"   # 주의 / 데이터부족 (주황)
+COLOR_BAD     = "#DC2626"   # 제외 / 위험 (빨강)
+COLOR_PRIMARY = "#2563EB"   # 기본 강조 (파랑)
+COLOR_PURPLE  = "#7C3AED"   # 소비층 적합도
+COLOR_GRAY    = "#78716C"   # 기회 검토 / 중립
+
 
 @st.cache_data
 def load_map_summary() -> pd.DataFrame:
@@ -78,6 +113,25 @@ def load_sigungu_geojson() -> dict:
         return {}
     with open(KOREA_SIGUNGU_GEOJSON_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+@st.cache_data
+def _build_geo_district_whitelist(geojson: dict) -> dict[str, set]:
+    """GeoJSON 기반 시도 → 유효 시군구명 집합 (직접명 + 부모시 prefix 포함)"""
+    import re as _re
+    whitelist: dict[str, set] = {}
+    for feat in geojson.get("features", []):
+        props = feat.get("properties", {})
+        sido = props.get("sido_name", "")
+        name = props.get("name", "")
+        if not sido or not name:
+            continue
+        whitelist.setdefault(sido, set()).add(name)
+        # '수원시팔달구' → '수원시' 와 같이 부모 시 이름 추출
+        m = _re.match(r"(.+[시군])(.+[군구동])", name)
+        if m:
+            whitelist[sido].add(m.group(1))
+    return whitelist
 
 
 @st.cache_data
@@ -115,17 +169,19 @@ def _cached_top_items(matrix: pd.DataFrame, n: int = 8) -> pd.DataFrame:
 
 
 @st.cache_data
-def _cached_monthly_trend(matrix: pd.DataFrame) -> pd.DataFrame:
-    if matrix.empty or "latest_posted_date" not in matrix.columns:
+def _cached_monthly_trend(cleaned: pd.DataFrame) -> pd.DataFrame:
+    """개별 공고 posted_date 기준 월별 건수 집계 (matrix의 latest_posted_date 아님)"""
+    if cleaned.empty or "posted_date" not in cleaned.columns:
         return pd.DataFrame()
-    df = matrix.copy()
-    df["_dt"] = pd.to_datetime(df["latest_posted_date"], errors="coerce")
+    df = cleaned.copy()
+    df["_dt"] = pd.to_datetime(df["posted_date"], errors="coerce")
     df["_ym"] = df["_dt"].dt.to_period("M").astype(str)
     return (
         df.dropna(subset=["_ym"])
-        .groupby("_ym")["bid_count"].sum()
-        .reset_index()
-        .rename(columns={"_ym": "연월", "bid_count": "공고 수"})
+        .groupby("_ym")
+        .size()
+        .reset_index(name="공고 수")
+        .rename(columns={"_ym": "연월"})
         .sort_values("연월")
     )
 
@@ -171,22 +227,48 @@ def format_score(value) -> str:
 
 def show_score_formula():
     """추천 점수 계산식 설명 expander"""
-    with st.expander("📐 추천 점수(opportunity_score) 계산 방식"):
+    with st.expander("📐 분석 점수 해석 기준"):
         st.markdown(
-            """
-**opportunity_score = 공고수×40% + 금액×25% + 최근성×15% + 경쟁도×20%**
+            f"""
+### 1. 기회점수 (opportunity_score) — 0~100점
+공공조달 수요의 크기·빈도·최근성·진입장벽을 종합한 창업 기회 점수입니다.
+
+**opportunity_score = 공고수×{int(W_CNT*100)}% + 금액×{int(W_AMT*100)}% + 최근성×{int(W_REC*100)}% + 경쟁도×{int(W_COMP*100)}%**
 
 | 구성 요소 | 가중치 | 원본 값 | 계산 방식 |
 |---|---|---|---|
-| 공고수 점수 (count_score) | 40% | bid_count | 전체 구 중 min-max 정규화 (0~1) |
-| 금액 점수 (amount_score) | 25% | amount_sum | 전체 구 중 min-max 정규화 (0~1) |
-| 최근성 점수 (recency_score) | 15% | latest_posted_date | 1 ÷ (1 + 경과일/30) |
-| 경쟁도 점수 (competition_score) | 20% | dsgntCmptYn | 개방입찰 비율 (지명경쟁 제외) |
+| 공고수 점수 (count_score) | {int(W_CNT*100)}% | bid_count | 전체 지역 min-max 정규화 (0~1) |
+| 금액 점수 (amount_score) | {int(W_AMT*100)}% | amount_sum | 전체 지역 min-max 정규화 (0~1) |
+| 최근성 점수 (recency_score) | {int(W_REC*100)}% | posted_date | 1 ÷ (1 + 경과일/30) |
+| 경쟁도 점수 (competition_score) | {int(W_COMP*100)}% | dsgntCmptYn | 개방입찰 비율 (지명경쟁 낮을수록 높음) |
 
-> **경쟁도**: 조달청 입찰공고의 `지명경쟁여부(dsgntCmptYn)` 컬럼 기반.
-> 지명경쟁(기존 업체만 참여 가능)이 적을수록 신규창업자 진입 여지가 높아 점수가 높습니다.
+> 공고 수가 적어도 금액이 크거나 최근 발주이거나 개방입찰 비율이 높으면 점수가 높을 수 있습니다.
 
-> **공고 수가 적지만 순위가 높은 경우**: 금액이 크거나, 최근 발주이거나, 개방입찰 비율이 높기 때문입니다.
+---
+
+### 2. 소비층 적합도 (consumer_fit_score) — 0~1점
+해당 품목의 주요 소비 연령대와 지역 인구 구성의 일치도입니다.
+
+- **높을수록**: 그 품목을 많이 소비하는 연령대가 해당 지역에 많이 거주
+- 예: 의료·복지용품 → 고령 인구 비중이 높은 지역에서 적합도 높음
+- 지역별 10세 단위 인구 비율 × 품목군 연령 가중치 내적(dot product)으로 계산
+
+---
+
+### 3. 경쟁 포화도 (stores_per_10k) — 인구 1만명당 유사업체 수
+공공조달 납품을 경쟁하는 지역 내 유사 업체 수를 인구 대비로 측정합니다.
+
+- **낮을수록 블루오션**: 수요 대비 공급자가 적어 신규 진입 여지가 큼
+- **높을수록 레드오션**: 이미 유사 업체가 포화 상태, 가격 경쟁 심화
+- 출처: 국세청 사업체 통계 기반 업종 코드별 업체 수
+
+---
+
+### 4. 물류 거점 점수 (hub_score) — 0~100점
+납품 물류의 편의성·접근성을 나타냅니다.
+
+- 공공기관 밀도, 수도권 접근성, 고속도로 IC 근접도 등 인프라 가중 합산
+- **높을수록**: 다양한 기관에 납품하기 유리한 물류 거점 위치
             """
         )
 
@@ -207,10 +289,10 @@ def build_score_breakdown(df: pd.DataFrame) -> pd.DataFrame:
         "bid_count": "공고 수",
         "amount_sum": "총 금액",
         "latest_posted_date": "최근 공고일",
-        "count_score": "공고수(×0.40)",
-        "amount_score": "금액(×0.25)",
-        "recency_score": "최근성(×0.15)",
-        "competition_score": "경쟁도(×0.20)",
+        "count_score": f"공고수(×{W_CNT})",
+        "amount_score": f"금액(×{W_AMT})",
+        "recency_score": f"최근성(×{W_REC})",
+        "competition_score": f"경쟁도(×{W_COMP})",
         "opportunity_score": "최종 점수",
     })
 
@@ -255,6 +337,10 @@ features = features_all
 classified = classified_all
 cleaned = cleaned_all
 top_items = top_items_all
+
+# GeoJSON 기반 시도-시군구 whitelist (잘못 분류된 지역 필터 목적)
+_sigungu_geo_global = load_sigungu_geojson()
+_geo_district_whitelist = _build_geo_district_whitelist(_sigungu_geo_global) if _sigungu_geo_global else {}
 
 
 # ── 서비스 헤더 (모든 탭 공통) ──────────────────────────────────────────────
@@ -318,12 +404,12 @@ with tab_map:
         "물류 거점 점수": "hub_score",
     }
     _LABEL_COLOR = {
-        "고기회 지역":    "#16A34A",
-        "소비층 적합":    "#2563EB",
-        "물류 거점 후보": "#7C3AED",
-        "경쟁 주의":      "#DC2626",
+        "고기회 지역":    COLOR_GOOD,
+        "소비층 적합":    COLOR_PRIMARY,
+        "물류 거점 후보": COLOR_PURPLE,
+        "경쟁 주의":      COLOR_BAD,
         "데이터 부족":    "#6B7280",
-        "기회 검토":      "#78716C",
+        "기회 검토":      COLOR_GRAY,
     }
 
     # ── session_state 초기화 ──────────────────────────────────────────────────
@@ -511,15 +597,15 @@ with tab_map:
         _opp_q75_d = _dist_df["opportunity_score"].quantile(0.75) if not _dist_df.empty else 0
 
         def _djlabel(r: pd.Series) -> str:
-            if r["bid_count"] < 5:
+            if r["bid_count"] < MIN_BID_DISTRICT:
                 return "데이터 부족"
             if r["opportunity_score"] >= _opp_q75_d:
                 return "고기회 지역"
-            if r.get("competition_score", 1.0) < 0.3:
+            if r.get("competition_score", 1.0) < COMPETITION_WARN:
                 return "경쟁 주의"
-            if r.get("consumer_fit_score", 0.0) > 0.6:
+            if r.get("consumer_fit_score", 0.0) > CONSUMER_FIT_GOOD:
                 return "소비층 적합"
-            if r.get("hub_score", 0.0) >= 70:
+            if r.get("hub_score", 0.0) >= HUB_SCORE_GOOD:
                 return "물류 거점 후보"
             return "기회 검토"
 
@@ -559,7 +645,7 @@ with tab_map:
                 )
                 fig.update_layout(
                     margin={"r": 0, "t": 0, "l": 0, "b": 0},
-                    height=500,
+                    height=600,
                     coloraxis_colorbar=dict(title=selected_metric_label, thickness=12, len=0.7),
                     paper_bgcolor="rgba(0,0,0,0)",
                     geo=dict(bgcolor="rgba(0,0,0,0)"),
@@ -603,13 +689,32 @@ with tab_map:
 
                 if _sg_features:
                     _sg_geo = {"type": "FeatureCollection", "features": _sg_features}
-                    # GeoJSON name vs 데이터 district 매칭 확인용
                     _geo_names = {f["properties"]["name"] for f in _sg_features}
                     _data_names = set(_dist_df["district"].tolist())
-                    # 매칭되는 데이터만 사용 (name 정확 매칭)
-                    _dist_matched = _dist_df[_dist_df["district"].isin(_geo_names)].copy()
-                    # 매칭 안 되는 구는 이름 정규화 시도 (市 안의 區 등)
-                    if _dist_matched.empty or len(_dist_matched) < len(_dist_df) * 0.3:
+
+                    # GeoJSON feature → 데이터 district 매핑 (직접 매칭 + prefix 매칭)
+                    # 예: GeoJSON '수원시팔달구' ← data '수원시' (prefix match)
+                    _geo_to_data: dict[str, str] = {}
+                    for _gn in _geo_names:
+                        if _gn in _data_names:
+                            _geo_to_data[_gn] = _gn
+                        else:
+                            for _dn in _data_names:
+                                if _gn.startswith(_dn):
+                                    _geo_to_data[_gn] = _dn
+                                    break
+
+                    # 매칭된 GeoJSON feature 행 확장 (부모 district 값을 서브 feature에 복사)
+                    if _geo_to_data:
+                        _exp_rows = []
+                        for _geo_n, _data_n in _geo_to_data.items():
+                            _src = _dist_df[_dist_df["district"] == _data_n]
+                            if not _src.empty:
+                                _r = _src.iloc[0].copy()
+                                _r["district"] = _geo_n
+                                _exp_rows.append(_r)
+                        _dist_matched = pd.DataFrame(_exp_rows) if _exp_rows else _dist_df.copy()
+                    else:
                         _dist_matched = _dist_df.copy()
 
                     fig_d = px.choropleth(
@@ -628,12 +733,38 @@ with tab_map:
                         hover_name="district",
                         hover_data={_chart_col: True, "bid_count": True},
                     )
-                    fig_d.update_geos(
-                        fitbounds="locations", visible=False,
-                        bgcolor="rgba(0,0,0,0)",
-                    )
+                    # 시도별 명시 좌표 범위 (fitbounds 단독으로 zoom 안 되는 경우 보완)
+                    _SIDO_BOUNDS: dict[str, tuple] = {
+                        "서울특별시":    (126.75, 127.20, 37.42, 37.70),
+                        "부산광역시":    (128.80, 129.30, 35.00, 35.38),
+                        "대구광역시":    (128.45, 128.85, 35.72, 36.02),
+                        "인천광역시":    (126.20, 126.85, 37.28, 37.68),
+                        "광주광역시":    (126.75, 127.00, 35.05, 35.30),
+                        "대전광역시":    (127.28, 127.60, 36.20, 36.48),
+                        "울산광역시":    (129.10, 129.50, 35.40, 35.68),
+                        "세종특별자치시": (127.17, 127.38, 36.43, 36.62),
+                        "경기도":       (126.55, 127.90, 36.90, 38.30),
+                        "강원특별자치도": (127.60, 129.35, 37.05, 38.60),
+                        "충청북도":     (127.35, 128.55, 36.05, 37.20),
+                        "충청남도":     (126.15, 127.65, 35.90, 37.00),
+                        "전라북도":     (126.45, 127.75, 35.20, 36.05),
+                        "전라남도":     (125.85, 127.80, 33.90, 35.35),
+                        "경상북도":     (128.00, 129.70, 35.68, 37.10),
+                        "경상남도":     (127.65, 129.35, 34.60, 35.75),
+                        "제주특별자치도": (126.10, 126.98, 33.10, 33.60),
+                    }
+                    _bnd = _SIDO_BOUNDS.get(_drilldown_city)
+                    if _bnd:
+                        _lon0, _lon1, _lat0, _lat1 = _bnd
+                        fig_d.update_geos(
+                            visible=False, bgcolor="rgba(0,0,0,0)",
+                            lonaxis={"range": [_lon0, _lon1]},
+                            lataxis={"range": [_lat0, _lat1]},
+                        )
+                    else:
+                        fig_d.update_geos(fitbounds="locations", visible=False, bgcolor="rgba(0,0,0,0)")
                     fig_d.update_layout(
-                        height=520,
+                        height=625,
                         margin={"r": 0, "t": 10, "l": 0, "b": 0},
                         paper_bgcolor="rgba(0,0,0,0)",
                         coloraxis_showscale=True,
@@ -646,7 +777,7 @@ with tab_map:
 
                     # 미매칭 지역 bar chart 보조
                     with st.expander("시군구 순위 보기"):
-                        _top20 = _dist_df.sort_values(_chart_col, ascending=False).head(20)
+                        _top20 = _dist_df.sort_values(_chart_col, ascending=False).head(TOP_N_MAP)
                         fig_rank = px.bar(
                             _top20.sort_values(_chart_col), x=_chart_col, y="district", orientation="h",
                             color=_chart_col, color_continuous_scale="Blues", height=max(350, len(_top20) * 22),
@@ -660,7 +791,7 @@ with tab_map:
                         st.plotly_chart(fig_rank, use_container_width=True)
                 else:
                     # GeoJSON 없을 때 bar chart 폴백
-                    _top20 = _dist_df.head(20)
+                    _top20 = _dist_df.head(TOP_N_MAP)
                     _bar_h = max(480, len(_top20) * 26)
                     fig_d = px.bar(
                         _top20, x=_chart_col, y="district", orientation="h",
@@ -718,12 +849,12 @@ with tab_map:
                     if _adj100 is not None and not pd.isna(_adj100):
                         _metrics_sel = [("보정 점수", float(_adj100), "#0EA5E9", False)]
                     else:
-                        _metrics_sel = [("기회점수", _cr.get("opp_score_100") or 0, "#2563EB", False)]
+                        _metrics_sel = [("기회점수", _cr.get("opp_score_100") or 0, COLOR_PRIMARY, False)]
                     if "consumer_fit_100" in _map_df.columns:
-                        _metrics_sel.append(("소비층 적합도", _cr.get("consumer_fit_100") or 0, "#7C3AED", False))
+                        _metrics_sel.append(("소비층 적합도", _cr.get("consumer_fit_100") or 0, COLOR_PURPLE, False))
                     if "competition_100" in _map_df.columns:
-                        _metrics_sel.append(("경쟁도", _cr.get("competition_100") or 0, "#DC2626", True))
-                    _metrics_sel.append(("물류 거점", _cr.get("hub_score") or 0, "#16A34A", False))
+                        _metrics_sel.append(("경쟁도", _cr.get("competition_100") or 0, COLOR_BAD, True))
+                    _metrics_sel.append(("물류 거점", _cr.get("hub_score") or 0, COLOR_GOOD, False))
                     st.plotly_chart(_make_panel_gauges(_metrics_sel), use_container_width=True, key="gauge_sel")
 
                 st.divider()
@@ -737,13 +868,13 @@ with tab_map:
                     if not _city_top.empty:
                         st.markdown("**상위 품목군**")
                         for _ii, _ir in enumerate(_city_top.itertuples()):
-                            _lc = "#16A34A" if _ii == 0 else "#2563EB"
+                            _lc = COLOR_GOOD if _ii == 0 else COLOR_PRIMARY
                             st.markdown(
                                 f'<div style="background:#F8FAFC;border:1px solid #E2E8F0;'
                                 f'border-radius:8px;padding:7px 10px;margin-bottom:5px;">'
                                 f'<span style="color:{_lc};font-weight:700;">{_ii+1}위</span> '
                                 f'<b style="font-size:12px;">{_ir.item_category}</b>'
-                                f'<span style="float:right;color:#2563EB;font-size:12px;font-weight:600;">'
+                                f'<span style="float:right;color:{COLOR_PRIMARY};font-size:12px;font-weight:600;">'
                                 f'{_ir.opportunity_score:.1f}점</span></div>',
                                 unsafe_allow_html=True,
                             )
@@ -776,7 +907,7 @@ with tab_map:
                             f'border-radius:8px;padding:8px 12px;margin-bottom:6px;">'
                             f'<span style="color:{_lc};font-weight:700;">{_i+1}위</span> '
                             f'<b>{_row.city}</b>'
-                            f'<span style="float:right;color:#2563EB;font-weight:600;">{_vstr}</span></div>',
+                            f'<span style="float:right;color:{COLOR_PRIMARY};font-weight:600;">{_vstr}</span></div>',
                             unsafe_allow_html=True,
                         )
 
@@ -784,11 +915,8 @@ with tab_map:
                     _cat_bids = int(_map_df["bid_count"].sum()) if "bid_count" in _map_df.columns else 0
                     _cat_opp  = _map_df["opportunity_score"].mean() if "opportunity_score" in _map_df.columns else 0
                     _cat_dist = int(_map_df["district_count"].sum()) if "district_count" in _map_df.columns else 0
-                    pa, pb = st.columns(2)
-                    with pa:
-                        st.metric("공고 건수", f"{_cat_bids:,}건")
-                    with pb:
-                        st.metric("분석 지역", f"{_cat_dist}개")
+                    st.metric("공고 건수", f"{_cat_bids:,}건")
+                    st.metric("분석 지역", f"{_cat_dist}개")
                     st.metric("평균 기회점수", f"{_cat_opp:.1f}점")
 
                     if selected_cat != "전체" and "judgment_label" in _map_df.columns:
@@ -833,7 +961,7 @@ with tab_map:
                         f'border-radius:8px;padding:8px 12px;margin-bottom:6px;">'
                         f'<span style="color:{_lc};font-weight:700;">{_i+1}위</span> '
                         f'<b>{_row.district}</b>'
-                        f'<span style="float:right;color:#2563EB;font-weight:600;">{_vstr}</span></div>',
+                        f'<span style="float:right;color:{COLOR_PRIMARY};font-weight:600;">{_vstr}</span></div>',
                         unsafe_allow_html=True,
                     )
 
@@ -856,14 +984,14 @@ with tab_map:
                     # 드릴다운 패널 게이지 차트
                     _opp_raw = _dr.get("opportunity_score", 0) or 0
                     _opp100_d = min(_opp_raw / max(_dist_df["opportunity_score"].max(), 1) * 100, 100)
-                    _metrics_dd = [("기회점수", _opp100_d, "#2563EB", False)]
+                    _metrics_dd = [("기회점수", _opp100_d, COLOR_PRIMARY, False)]
                     if "consumer_fit_score" in _dist_df.columns:
                         _cf100_d = (_dr.get("consumer_fit_score", 0) or 0) * 100
-                        _metrics_dd.append(("소비층 적합도", _cf100_d, "#7C3AED", False))
+                        _metrics_dd.append(("소비층 적합도", _cf100_d, COLOR_PURPLE, False))
                     if "competition_score" in _dist_df.columns:
                         _comp100_d = (_dr.get("competition_score", 0) or 0) * 100
-                        _metrics_dd.append(("경쟁도", _comp100_d, "#DC2626", True))
-                    _metrics_dd.append(("물류 점수", _dr.get("hub_score", 0) or 0, "#16A34A", False))
+                        _metrics_dd.append(("경쟁도", _comp100_d, COLOR_BAD, True))
+                    _metrics_dd.append(("물류 점수", _dr.get("hub_score", 0) or 0, COLOR_GOOD, False))
                     st.plotly_chart(_make_panel_gauges(_metrics_dd), use_container_width=True, key="gauge_dd")
 
                     st.divider()
@@ -921,7 +1049,7 @@ div[data-testid="stHorizontalBlock"] .stButton > button {
     with bc1:
         st.markdown("**Top 품목군**")
         if not matrix_all.empty:
-            top_items = _cached_top_items(matrix_all, n=8)
+            top_items = _cached_top_items(matrix_all, n=TOP_N_ITEMS)
             fig_items = px.bar(
                 top_items,
                 x="bid_count",
@@ -940,10 +1068,10 @@ div[data-testid="stHorizontalBlock"] .stButton > button {
             st.plotly_chart(fig_items, use_container_width=True)
 
     with bc2:
-        if not matrix_all.empty and "latest_posted_date" in matrix_all.columns:
-            trend = _cached_monthly_trend(matrix_all)
-            # 수집 기간: 원본에서 min/max 한 번만 계산
-            _dt_series = pd.to_datetime(matrix_all["latest_posted_date"], errors="coerce")
+        if not cleaned_all.empty and "posted_date" in cleaned_all.columns:
+            trend = _cached_monthly_trend(cleaned_all)
+            # 수집 기간: 실제 공고일 기준
+            _dt_series = pd.to_datetime(cleaned_all["posted_date"], errors="coerce")
             _dt_min, _dt_max = _dt_series.min(), _dt_series.max()
             _period_label = (
                 f"{_dt_min.strftime('%Y.%m')} ~ {_dt_max.strftime('%Y.%m')}"
@@ -951,29 +1079,28 @@ div[data-testid="stHorizontalBlock"] .stButton > button {
             )
             st.markdown(f"**월별 공고 추이**  <span style='font-size:11px;color:#94A3B8;'>수집 기간: {_period_label}</span>", unsafe_allow_html=True)
             if not trend.empty:
-                # 수집 시점 쏠림 방지: 직전 달까지만 표시 (이번 달 = 수집 중이라 급증)
                 import datetime as _dt_mod
                 _cutoff = (_dt_mod.date.today().replace(day=1) - _dt_mod.timedelta(days=1)).strftime("%Y-%m")
-                _trend_cut = trend[trend["연월"] <= _cutoff]
-                _trend_recent = _trend_cut.tail(18) if len(_trend_cut) > 18 else _trend_cut
-                if _trend_recent.empty:
-                    _trend_recent = trend.tail(18)
-                fig_trend = px.bar(
+                _trend_cut = trend[(trend["연월"] >= TREND_START_YM) & (trend["연월"] <= _cutoff)]
+                _trend_recent = _trend_cut if not _trend_cut.empty else trend.tail(18)
+                fig_trend = px.line(
                     _trend_recent, x="연월", y="공고 수",
                     labels={"연월": "", "공고 수": "공고 수"},
                     color_discrete_sequence=["#3B82F6"],
+                    markers=True,
                 )
+                fig_trend.update_traces(marker_size=6, line_width=2)
                 fig_trend.update_xaxes(tickangle=45)
                 fig_trend.update_layout(
                     height=300,
                     margin={"r": 0, "t": 10, "l": 0, "b": 50},
                     paper_bgcolor="rgba(0,0,0,0)",
                     plot_bgcolor="rgba(0,0,0,0)",
-                    bargap=0.15,
                 )
                 st.plotly_chart(fig_trend, use_container_width=True)
         else:
             st.markdown("**월별 공고 추이**")
+            st.caption("공고 원천 데이터(posted_date) 없음")
 
     with bc3:
         st.markdown("**물류 거점 Top 8**")
@@ -983,7 +1110,7 @@ div[data-testid="stHorizontalBlock"] .stButton > button {
                 .agg(score=("opportunity_score", "mean"), bids=("bid_count", "sum"))
                 .reset_index()
                 .sort_values("score", ascending=False)
-                .head(8)
+                .head(TOP_N_HUB)
             )
             # district가 city와 같거나 포함된 경우(광역시 등) city만 표시
             def _hub_label(row):
@@ -997,7 +1124,7 @@ div[data-testid="stHorizontalBlock"] .stButton > button {
             fig_hub = px.bar(
                 hub_df, x="score", y="label", orientation="h",
                 labels={"score": "기회점수", "label": ""},
-                color_discrete_sequence=["#7C3AED"],
+                color_discrete_sequence=[COLOR_PURPLE],
             )
             fig_hub.update_layout(
                 height=280,
@@ -1152,7 +1279,7 @@ with tab_search:
                                     .size()
                                     .reset_index(name="공고 수")
                                     .sort_values("공고 수", ascending=False)
-                                    .head(8)
+                                    .head(TOP_N_ITEMS)
                                 )
                                 if not detail_dist.empty:
                                     st.markdown("**세부 발주 유형**")
@@ -1240,34 +1367,37 @@ with tab_overview:
     st.subheader("데이터 규모")
     _ov_c1, _ov_c2, _ov_c3, _ov_c4, _ov_c5 = st.columns(5)
     with _ov_c1:
-        st.metric("수집 공고", f"{len(cleaned):,}건" if not cleaned.empty else "100,083건")
+        _ov_total = len(cleaned) if not cleaned.empty else (len(matrix_all) if not matrix_all.empty else 0)
+        st.metric("수집 공고", f"{_ov_total:,}건")
     with _ov_c2:
-        _ov_city = cleaned["city"].nunique() if not cleaned.empty and "city" in cleaned.columns else 17
+        _ov_city = (cleaned["city"].nunique() if not cleaned.empty and "city" in cleaned.columns
+                    else matrix_all["city"].nunique() if not matrix_all.empty and "city" in matrix_all.columns else 0)
         st.metric("시/도", f"{_ov_city}개")
     with _ov_c3:
-        _ov_dist = cleaned["district"].nunique() if not cleaned.empty else 220
+        _ov_dist = (cleaned["district"].nunique() if not cleaned.empty and "district" in cleaned.columns
+                    else matrix_all["district"].nunique() if not matrix_all.empty and "district" in matrix_all.columns else 0)
         st.metric("시·군·구", f"{_ov_dist}개")
     with _ov_c4:
-        _ov_cat = features["item_category"].nunique() if not features.empty else 18
+        _ov_cat = (matrix_all["item_category"].nunique() if not matrix_all.empty and "item_category" in matrix_all.columns
+                   else features["item_category"].nunique() if not features.empty else 0)
         st.metric("품목군", f"{_ov_cat}종")
     with _ov_c5:
-        _ov_api = "4개 기관"
-        st.metric("연계 API", _ov_api)
+        st.metric("연계 API", "4개 기관")
 
-    st.caption("조달청 100,083건 (최근 2년) · 행안부 인구 · 소상공인 상권정보 · KOSIS 신생기업 생존율")
+    st.caption(f"조달청 {_ov_total:,}건 (수집 기간: {TREND_START_YM} ~ ) · 행안부 인구 · 소상공인 상권정보 · KOSIS 신생기업 생존율")
 
     st.markdown("---")
 
     # ── 데이터 파이프라인 ────────────────────────────────────────────────────
     st.subheader("데이터 파이프라인")
     st.code(
-        """
-조달청 입찰공고 API (전국 17개 시/도, 100,083건)
-  → 공고명 분류 (item_category_detail, 18종)
+        f"""
+조달청 입찰공고 API (전국 {_ov_city}개 시/도, {_ov_total:,}건)
+  → 공고명 분류 (item_category_detail, {_ov_cat}종)
       1단계: 키워드 규칙 매칭
       2단계: TF-IDF + Logistic Regression ML 분류기 (정확도 98.6%)
       3단계: confidence 미달 → 기타/미분류
-  → opportunity_score = 공고수(40%) + 금액(25%) + 최근성(15%) + 경쟁도(20%)
+  → opportunity_score = 공고수({int(W_CNT*100)}%) + 금액({int(W_AMT*100)}%) + 최근성({int(W_REC*100)}%) + 경쟁도({int(W_COMP*100)}%)
   → bids_per_10k_population (인구 보정)
 
 행안부 연령별 인구 API
@@ -1359,6 +1489,12 @@ with tab_region:
         _city_data = features_all[features_all["city"] == sel_city] if sel_city and "city" in features_all.columns else features_all
         with col_f2:
             districts = sorted(_city_data["district"].dropna().unique().tolist())
+            # GeoJSON whitelist로 잘못 분류된 타 시도 지역 제거
+            _geo_wl = _geo_district_whitelist.get(sel_city, set())
+            if _geo_wl:
+                _filtered = [d for d in districts if d in _geo_wl]
+                if len(_filtered) >= 3:
+                    districts = _filtered
             selected = st.selectbox("시군구 선택", districts, key="region_tab_district")
 
         result = _city_data[_city_data["district"] == selected].sort_values("opportunity_score", ascending=False)
@@ -1378,7 +1514,7 @@ with tab_region:
 
             if "recommendation_flag" in result.columns and not result.empty:
                 # ── bar chart: opportunity_score by item_category ──────────
-                _flag_color = {"추천": "#16A34A", "제외": "#DC2626", "데이터부족": "#F59E0B"}
+                _flag_color = {"추천": COLOR_GOOD, "제외": COLOR_BAD, "데이터부족": COLOR_WARN}
                 _r_sorted = result.sort_values("opportunity_score")
                 _r_sorted["_color"] = _r_sorted["recommendation_flag"].map(_flag_color).fillna("#94A3B8")
                 _cf_text = (
@@ -1406,7 +1542,7 @@ with tab_region:
                 _leg_html = "".join(
                     f'<span style="background:{c}20;color:{c};padding:2px 10px;border-radius:10px;'
                     f'font-size:12px;font-weight:600;margin-right:6px;">{l}</span>'
-                    for l, c in [("✅ 추천", "#16A34A"), ("⚠️ 데이터부족", "#F59E0B"), ("🚫 제외", "#DC2626")]
+                    for l, c in [("✅ 추천", COLOR_GOOD), ("⚠️ 데이터부족", COLOR_WARN), ("🚫 제외", COLOR_BAD)]
                 )
                 st.markdown(_leg_html, unsafe_allow_html=True)
 
@@ -1460,7 +1596,7 @@ with tab_region:
                                 _comparison = []
                                 for _item in _shortage_items[:6]:
                                     _item_rows = _same_city[_same_city["item_category"] == _item]
-                                    _with_data = (_item_rows["bid_count"] >= 10).sum()
+                                    _with_data = (_item_rows["bid_count"] >= MIN_BID_REGION).sum()
                                     _avg = _item_rows["bid_count"].mean() if not _item_rows.empty else 0
                                     _comparison.append({
                                         "item": _item, "city": CITY_LABELS.get(sel_city, sel_city),
@@ -1755,7 +1891,7 @@ with tab_item:
                         .size()
                         .reset_index(name="공고 수")
                         .sort_values("공고 수", ascending=False)
-                        .head(8)
+                        .head(TOP_N_ITEMS)
                     )
                     if not detail_dist.empty:
                         st.markdown("**세부 발주 유형**")
@@ -1784,6 +1920,11 @@ with tab_compare:
                 st.session_state["_cmp_prev_a"] = city_a_label
                 st.session_state.pop("cmp_dist_a", None)
             dists_a = sorted(features_all[features_all["city"] == city_a]["district"].dropna().unique().tolist()) if city_a else []
+            _wl_a = _geo_district_whitelist.get(city_a, set())
+            if _wl_a:
+                _fa = [d for d in dists_a if d in _wl_a]
+                if len(_fa) >= 3:
+                    dists_a = _fa
             dist_a = st.selectbox("A 시군구", dists_a, index=0, key="cmp_dist_a")
         with col_b:
             city_b_label = st.selectbox("B 시/도", _cmp_labels, index=_seoul_cmp_idx, key="cmp_city_b")
@@ -1792,17 +1933,30 @@ with tab_compare:
                 st.session_state["_cmp_prev_b"] = city_b_label
                 st.session_state.pop("cmp_dist_b", None)
             dists_b = sorted(features_all[features_all["city"] == city_b]["district"].dropna().unique().tolist()) if city_b else []
+            _wl_b = _geo_district_whitelist.get(city_b, set())
+            if _wl_b:
+                _fb = [d for d in dists_b if d in _wl_b]
+                if len(_fb) >= 3:
+                    dists_b = _fb
             dist_b = st.selectbox("B 시군구", dists_b, index=min(1, len(dists_b) - 1) if dists_b else 0, key="cmp_dist_b")
 
-        data_a = features_all[(features_all["city"] == city_a) & (features_all["district"] == dist_a)].set_index("item_category") if city_a else pd.DataFrame()
-        data_b = features_all[(features_all["city"] == city_b) & (features_all["district"] == dist_b)].set_index("item_category") if city_b else pd.DataFrame()
+        # groupby first → 동일 item_category 중복 행 집계 (Series 반환 방지)
+        def _agg_compare(df: pd.DataFrame) -> pd.DataFrame:
+            if df.empty:
+                return df
+            agg_cols = {c: "mean" for c in ["opportunity_score", "competition_score"] if c in df.columns}
+            agg_cols.update({c: "sum" for c in ["bid_count", "amount_sum"] if c in df.columns})
+            return df.groupby("item_category").agg(agg_cols)
+
+        data_a = _agg_compare(features_all[(features_all["city"] == city_a) & (features_all["district"] == dist_a)]) if city_a else pd.DataFrame()
+        data_b = _agg_compare(features_all[(features_all["city"] == city_b) & (features_all["district"] == dist_b)]) if city_b else pd.DataFrame()
 
         all_items = sorted(set(data_a.index) | set(data_b.index))
 
         rows = []
         for item in all_items:
-            score_a = data_a.loc[item, "opportunity_score"] if item in data_a.index else 0
-            score_b = data_b.loc[item, "opportunity_score"] if item in data_b.index else 0
+            score_a = float(data_a.loc[item, "opportunity_score"]) if item in data_a.index else 0
+            score_b = float(data_b.loc[item, "opportunity_score"]) if item in data_b.index else 0
             cnt_a = int(data_a.loc[item, "bid_count"]) if item in data_a.index else 0
             cnt_b = int(data_b.loc[item, "bid_count"]) if item in data_b.index else 0
             rows.append({
@@ -1921,7 +2075,7 @@ with tab_consumer:
                     how="left",
                 ).fillna({"bid_count": 0, "opportunity_score": 0})
                 combined["종합 점수"] = (
-                    combined["opportunity_score"] * 0.6 + combined["consumer_fit_score"] * 100 * 0.4
+                    combined["opportunity_score"] * W_OPP + combined["consumer_fit_score"] * 100 * W_FIT
                 ).round(2)
                 combined = combined.sort_values("종합 점수", ascending=False)
                 # scatter: x=공공수요, y=소비층 적합도, size=공고수
@@ -1967,7 +2121,7 @@ with tab_consumer:
             with col1:
                 st.subheader(f"'{sel_cat_fit}' 소비층 적합 자치구 순위")
                 if not cat_fit.empty:
-                    _top_cf = cat_fit.head(20).copy()
+                    _top_cf = cat_fit.head(TOP_N_MAP).copy()
                     _top_cf["label"] = (
                         _top_cf["city"].str[:2] + " " + _top_cf["district"]
                         if _is_national_fit and "city" in _top_cf.columns
@@ -2055,7 +2209,7 @@ with tab_competition:
             with col1:
                 st.subheader(f"'{selected_inds}' 업종 지역별 밀도")
                 if not filtered.empty:
-                    _top_comp = filtered.head(20).copy()
+                    _top_comp = filtered.head(TOP_N_MAP).copy()
                     if _is_national_comp and "city" in _top_comp.columns:
                         _top_comp["label"] = _top_comp["city"].str[:2] + " " + _top_comp["district"]
                     else:
@@ -2202,7 +2356,7 @@ with tab_competition:
                     # 전국 모드: 상위 20개만 표시, 레이블은 top 10만 (나머지 hover)
                     _scatter_national = not _scatter_city
                     if _scatter_national:
-                        merged_plot = merged.head(20).copy()
+                        merged_plot = merged.head(TOP_N_MAP).copy()
                         _top10_labels = set(merged_plot.head(10)["지역"].tolist())
                         merged_plot["_label"] = merged_plot["지역"].apply(lambda x: x if x in _top10_labels else "")
                         _text_col = "_label"
@@ -2329,7 +2483,7 @@ with tab_logistics:
             _city_agg["_amt_score"] = min_max_score(_city_agg["physical_amount"])
             _city_agg["_cat_score"] = min_max_score(_city_agg["category_count"])
             _city_agg["hub_score"] = (
-                (_city_agg["_bids_score"] * 0.50 + _city_agg["_amt_score"] * 0.30 + _city_agg["_cat_score"] * 0.20) * 100
+                (_city_agg["_bids_score"] * W_HUB_BIDS + _city_agg["_amt_score"] * W_HUB_AMT + _city_agg["_cat_score"] * W_HUB_CAT) * 100
             ).round(1)
             _city_agg["zone"] = _city_agg["city"].map(COVERAGE_ZONE).fillna("기타")
             _city_agg["city_label"] = _city_agg["city"].map(CITY_LABELS).fillna(_city_agg["city"])
@@ -2513,7 +2667,7 @@ with tab_raw:
             "city", "district", "bid_title", "agency_name",
             "item_category", "estimated_amount", "posted_date",
         ] if c in _raw_view.columns]
-        display = _raw_view[show_cols].head(500).copy()
+        display = _raw_view[show_cols].head(RAW_PREVIEW).copy()
         if "estimated_amount" in display.columns:
             display["estimated_amount"] = display["estimated_amount"].apply(format_won)
         st.caption(f"최대 500건 표시 (전체 {_total_sel:,}건)")

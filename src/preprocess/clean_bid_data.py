@@ -200,6 +200,38 @@ def clean_bid_data(df: pd.DataFrame) -> pd.DataFrame:
         tagged_city = df["_source_city"].notna() & (df["_source_city"].astype(str).str.strip() != "")
         df.loc[tagged_city, "city"] = df.loc[tagged_city, "_source_city"]
 
+    # _source_city가 있는데 district가 해당 시/도 소속이 아닌 경우 교정합니다.
+    # 원인: _extract_district가 다른 시/도 지명을 텍스트에서 잘못 추출한 경우.
+    # 교정 순서: ① 해당 시/도 district로 재추출 → ② 없으면 시/도명 자체를 district로 사용.
+    if "_source_city" in df.columns:
+        has_src = df["_source_city"].notna() & (df["_source_city"].astype(str).str.strip() != "")
+
+        def _is_mismatch(row) -> bool:
+            src_city = str(row.get("_source_city", "")).strip()
+            district = str(row.get("district", "")).strip()
+            if not src_city or district == "미상":
+                return False
+            valid = set(REGIONS.get(src_city, []))
+            return bool(valid) and district not in valid and district != src_city
+
+        mismatched = has_src & df.apply(_is_mismatch, axis=1)
+
+        if mismatched.any():
+            def _fix_district(row) -> str:
+                src_city = str(row.get("_source_city", "")).strip()
+                valid_districts = sorted(REGIONS.get(src_city, []), key=len, reverse=True)
+                if not valid_districts:
+                    return src_city
+                row_text = _row_text(row)
+                for d in valid_districts:
+                    if d in row_text:
+                        return d
+                return src_city
+
+            fixed = df.loc[mismatched].apply(_fix_district, axis=1)
+            df.loc[mismatched, "district"] = fixed
+            df.loc[mismatched, "city"] = df.loc[mismatched, "_source_city"]
+
     # district가 미상이지만 city가 확정된 행 → city명을 district로 사용 (시 단위 집계용)
     city_known = (df["district"] == "미상") & (df["city"] != "미상")
     df.loc[city_known, "district"] = df.loc[city_known, "city"]
