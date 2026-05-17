@@ -591,6 +591,12 @@ with tab_map:
 
         _dist_df = _src_d.groupby("district").agg(**_agg_d).round(2).reset_index()
 
+        # 오분류 district 제거: 해당 시도 소속 시군구 + 시도명 자체만 허용
+        _valid_d = set(REGIONS.get(_drilldown_city, []))
+        if _valid_d:
+            # 타 시도 district 제거, 시도명 자체(=district없는 집계행)도 제외
+            _dist_df = _dist_df[_dist_df["district"].isin(_valid_d)]
+
         # 소비층 적합도 조인
         if not consumer_fit.empty and "consumer_fit_score" in consumer_fit.columns and "city" in consumer_fit.columns:
             _cf_d = consumer_fit[consumer_fit["city"] == _drilldown_city]
@@ -994,16 +1000,20 @@ with tab_map:
                     st.metric("공고수", f"{int(_dr.get('bid_count', 0)):,}건")
 
                     # 드릴다운 패널 게이지 차트
-                    _opp_raw = _dr.get("opportunity_score", 0) or 0
-                    _opp100_d = min(_opp_raw / max(_dist_df["opportunity_score"].max(), 1) * 100, 100)
+                    def _safe(val, mul=1.0, cap=100.0):
+                        v = val if not pd.isna(val) else 0.0
+                        return min(float(v) * mul, cap)
+
+                    _opp_raw = _dr.get("opportunity_score") or 0
+                    _opp100_d = _safe(_opp_raw, 100.0 / max(_dist_df["opportunity_score"].max(), 1))
                     _metrics_dd = [("기회점수", _opp100_d, COLOR_PRIMARY, False)]
                     if "consumer_fit_score" in _dist_df.columns:
-                        _cf100_d = (_dr.get("consumer_fit_score", 0) or 0) * 100
+                        _cf100_d = _safe(_dr.get("consumer_fit_score"), 100.0)
                         _metrics_dd.append(("소비층 적합도", _cf100_d, COLOR_PURPLE, False))
                     if "competition_score" in _dist_df.columns:
-                        _comp100_d = (_dr.get("competition_score", 0) or 0) * 100
+                        _comp100_d = _safe(_dr.get("competition_score"), 100.0)
                         _metrics_dd.append(("경쟁도", _comp100_d, COLOR_BAD, True))
-                    _metrics_dd.append(("물류 점수", _dr.get("hub_score", 0) or 0, COLOR_GOOD, False))
+                    _metrics_dd.append(("물류 점수", _safe(_dr.get("hub_score")), COLOR_GOOD, False))
                     st.plotly_chart(_make_panel_gauges(_metrics_dd), use_container_width=True, key="gauge_dd")
 
                     st.divider()
