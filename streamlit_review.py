@@ -1352,6 +1352,10 @@ with tab_region:
         with col_f1:
             sel_city_label = st.selectbox("시/도 선택", _tab_city_labels, index=_default_city_idx, key="region_tab_city")
         sel_city = _tab_cities[_tab_city_labels.index(sel_city_label)] if _tab_cities else None
+        # city 변경 시 district 캐시 즉시 제거 (selectbox 옵션 vs 캐시 불일치 방지)
+        if st.session_state.get("_region_prev_city") != sel_city_label:
+            st.session_state["_region_prev_city"] = sel_city_label
+            st.session_state.pop("region_tab_district", None)
         _city_data = features_all[features_all["city"] == sel_city] if sel_city and "city" in features_all.columns else features_all
         with col_f2:
             districts = sorted(_city_data["district"].dropna().unique().tolist())
@@ -1442,14 +1446,12 @@ with tab_region:
                             "수요 없음 vs 블루오션 — AI 판정으로 확인하세요."
                         )
 
-                    # AI 판정 토글
+                    # AI 판정 — 버튼 클릭 시 표시 (토글 대신)
                     _ai_shortage_key = f"shortage_verdict_{selected}"
-                    _show_verdict = st.toggle("🤖 AI 판정 — 블루오션인지 저수요인지 분석", key=f"toggle_{_ai_shortage_key}")
-                    if _show_verdict:
-                        if _ai_shortage_key not in st.session_state.get("gemini_cache", {}):
+                    if _ai_shortage_key not in st.session_state.get("gemini_cache", {}):
+                        if st.button("🤖 AI 판정 실행 — 블루오션 vs 저수요", key=f"btn_{_ai_shortage_key}"):
                             with st.spinner("인근 지역 데이터와 비교 분석 중..."):
                                 from src.recommendation.gemini_client import build_shortage_verdict, ShortageContext
-                                # 같은 시/도 내 데이터부족 품목별 비교
                                 _same_city = features_all[
                                     (features_all["city"] == sel_city) &
                                     (features_all["district"] != selected)
@@ -1478,6 +1480,8 @@ with tab_region:
                                 if "gemini_cache" not in st.session_state:
                                     st.session_state["gemini_cache"] = {}
                                 st.session_state["gemini_cache"][_ai_shortage_key] = build_shortage_verdict(_sctx)
+                                st.rerun()
+                    if _ai_shortage_key in st.session_state.get("gemini_cache", {}):
                         st.markdown(st.session_state["gemini_cache"][_ai_shortage_key])
             else:
                 st.dataframe(display, use_container_width=True, hide_index=True)
@@ -1520,9 +1524,8 @@ with tab_region:
                 "공고 건수가 많은 품목은 수요가 확실하지만 기존 납품사와의 경쟁이 치열할 수 있습니다. "
                 "레드오션인지 아직 진입 여지가 있는지 AI가 판정합니다."
             )
-            _show_overdemand = st.toggle("🤖 AI 판정 — 레드오션인지 진입 여지 있는지 분석", key=f"toggle_{_overdemand_key}")
-            if _show_overdemand:
-                if _overdemand_key not in st.session_state.get("gemini_cache", {}):
+            if _overdemand_key not in st.session_state.get("gemini_cache", {}):
+                if st.button("🤖 AI 판정 실행 — 레드오션 vs 진입 여지", key=f"btn_{_overdemand_key}"):
                     with st.spinner("경쟁 구조 분석 중..."):
                         from src.recommendation.gemini_client import build_overdemand_verdict, OverdemandContext
                         _same_city_all = features_all[
@@ -1551,6 +1554,8 @@ with tab_region:
                         if "gemini_cache" not in st.session_state:
                             st.session_state["gemini_cache"] = {}
                         st.session_state["gemini_cache"][_overdemand_key] = build_overdemand_verdict(_octx)
+                        st.rerun()
+            if _overdemand_key in st.session_state.get("gemini_cache", {}):
                 st.markdown(st.session_state["gemini_cache"][_overdemand_key])
 
         # AI 공공수요 해석 (Gemini)
@@ -1775,11 +1780,17 @@ with tab_compare:
         with col_a:
             city_a_label = st.selectbox("A 시/도", _cmp_labels, index=_seoul_cmp_idx, key="cmp_city_a")
             city_a = _cmp_cities[_cmp_labels.index(city_a_label)] if _cmp_cities else None
+            if st.session_state.get("_cmp_prev_a") != city_a_label:
+                st.session_state["_cmp_prev_a"] = city_a_label
+                st.session_state.pop("cmp_dist_a", None)
             dists_a = sorted(features_all[features_all["city"] == city_a]["district"].dropna().unique().tolist()) if city_a else []
             dist_a = st.selectbox("A 시군구", dists_a, index=0, key="cmp_dist_a")
         with col_b:
             city_b_label = st.selectbox("B 시/도", _cmp_labels, index=_seoul_cmp_idx, key="cmp_city_b")
             city_b = _cmp_cities[_cmp_labels.index(city_b_label)] if _cmp_cities else None
+            if st.session_state.get("_cmp_prev_b") != city_b_label:
+                st.session_state["_cmp_prev_b"] = city_b_label
+                st.session_state.pop("cmp_dist_b", None)
             dists_b = sorted(features_all[features_all["city"] == city_b]["district"].dropna().unique().tolist()) if city_b else []
             dist_b = st.selectbox("B 시군구", dists_b, index=min(1, len(dists_b) - 1) if dists_b else 0, key="cmp_dist_b")
 
@@ -2150,8 +2161,10 @@ with tab_competition:
                 feat_cols = ["city", "district", "bid_count", "opportunity_score"] if "city" in features.columns else ["district", "bid_count", "opportunity_score"]
                 feat_cols = [c for c in feat_cols if c in features.columns]
                 cat_bids = features[features["item_category"] == sel_cat][feat_cols].copy()
-                if _ctx_city_cp and "city" in cat_bids.columns:
-                    cat_bids = cat_bids[cat_bids["city"] == _ctx_city_cp]
+                # 경쟁 분석 탭의 city selectbox 우선, 없으면 ctx_city 사용
+                _scatter_city = _sel_city_cp if _sel_city_cp != "전국" else _ctx_city_cp
+                if _scatter_city and "city" in cat_bids.columns:
+                    cat_bids = cat_bids[cat_bids["city"] == _scatter_city]
 
                 cat_stores_map = {
                     "급식/식자재":      "음식/카페",
@@ -2186,14 +2199,26 @@ with tab_competition:
                         merged["지역"] = merged["city"].str[:2] + " " + merged["district"]
                     else:
                         merged["지역"] = merged["district"]
+                    # 전국 모드: 상위 20개만 표시, 레이블은 top 10만 (나머지 hover)
+                    _scatter_national = not _scatter_city
+                    if _scatter_national:
+                        merged_plot = merged.head(20).copy()
+                        _top10_labels = set(merged_plot.head(10)["지역"].tolist())
+                        merged_plot["_label"] = merged_plot["지역"].apply(lambda x: x if x in _top10_labels else "")
+                        _text_col = "_label"
+                        st.caption(f"상위 20개 지역 표시 (전체 {len(merged)}개). 시/도 선택 시 해당 지역만 표시됩니다.")
+                    else:
+                        merged_plot = merged.copy()
+                        _text_col = "지역"
                     fig_vs = px.scatter(
-                        merged,
+                        merged_plot,
                         x="opportunity_score",
                         y="stores_per_10k",
                         size="bid_count",
-                        text="지역",
+                        text=_text_col,
                         color="수요↑/경쟁↓ 점수",
                         color_continuous_scale="RdYlGn",
+                        hover_name="지역",
                         labels={
                             "opportunity_score": "공공수요 점수",
                             "stores_per_10k": "경쟁 밀도 (점포/1만명)",
@@ -2254,17 +2279,36 @@ with tab_logistics:
         "제주특별자치도": "도서",
     }
 
+    # ── 필터 ─────────────────────────────────────────────────────────────────
+    _logi_f1, _logi_f2 = st.columns(2)
+    with _logi_f1:
+        _all_logi_cities = sorted(features_all["city"].dropna().unique().tolist()) if "city" in features_all.columns else []
+        _logi_city_labels = ["전국"] + [CITY_LABELS.get(c, c) for c in _all_logi_cities]
+        _logi_default = (
+            _logi_city_labels.index(CITY_LABELS.get(_ctx_city_l, _ctx_city_l))
+            if _ctx_city_l and CITY_LABELS.get(_ctx_city_l, _ctx_city_l) in _logi_city_labels else 0
+        )
+        _logi_city_sel = st.selectbox("시/도 필터", _logi_city_labels, index=_logi_default, key="logi_city_sel")
+    with _logi_f2:
+        _logi_cat_options = ["전체 물리적 납품"] + sorted(PHYSICAL_CATEGORIES)
+        _logi_cat_sel = st.selectbox("품목 필터", _logi_cat_options, key="logi_cat_sel")
+
+    _logi_city_actual = (
+        _all_logi_cities[_logi_city_labels.index(_logi_city_sel) - 1]
+        if _logi_city_sel != "전국" and _all_logi_cities else None
+    )
     _features_l = (
-        features_all[features_all["city"] == _ctx_city_l].copy()
-        if _ctx_city_l and "city" in features_all.columns and not features_all.empty
-        else features_all
+        features_all[features_all["city"] == _logi_city_actual].copy()
+        if _logi_city_actual and "city" in features_all.columns and not features_all.empty
+        else features_all.copy() if not features_all.empty else features_all
     )
 
     if _features_l.empty:
         st.warning("분석 데이터가 없습니다.")
     else:
         # 시/도 × 품목 집계
-        _hub_df = _features_l[_features_l["item_category"].isin(PHYSICAL_CATEGORIES)].copy() if "item_category" in _features_l.columns else pd.DataFrame()
+        _sel_phys_cats = PHYSICAL_CATEGORIES if _logi_cat_sel == "전체 물리적 납품" else {_logi_cat_sel}
+        _hub_df = _features_l[_features_l["item_category"].isin(_sel_phys_cats)].copy() if "item_category" in _features_l.columns else pd.DataFrame()
 
         if _hub_df.empty:
             st.warning("물리적 납품 품목 데이터가 없습니다.")
