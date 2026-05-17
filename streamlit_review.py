@@ -545,6 +545,7 @@ with tab_map:
             vertical_spacing=0.18,
             horizontal_spacing=0.08,
         )
+        _num = ["①", "②", "③", "④", "⑤", "⑥"]
         for idx, (label, val, color, invert) in enumerate(metrics):
             r, c = divmod(idx, cols)
             v = min(max(float(val or 0), 0), 100)
@@ -552,10 +553,11 @@ with tab_map:
                 ("#16A34A" if v < 40 else ("#F59E0B" if v < 70 else "#DC2626"))
                 if invert else color
             )
+            _titled = f"{_num[idx]} {label}" if idx < len(_num) else label
             fig.add_trace(go.Indicator(
                 mode="gauge+number",
                 value=v,
-                title={"text": label, "font": {"size": 10, "color": "#64748B"}},
+                title={"text": _titled, "font": {"size": 10, "color": "#64748B"}},
                 gauge={
                     "axis": {"range": [0, 100], "showticklabels": False, "ticks": ""},
                     "bar": {"color": bar_color, "thickness": 0.55},
