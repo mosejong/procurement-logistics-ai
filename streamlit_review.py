@@ -2272,25 +2272,27 @@ with tab_competition:
         )
     else:
         comp_view = competition.copy()
+        _sel_city_cp = "전국"  # 서울 전용 데이터일 때도 참조 가능하도록 기본값 선언
 
         if _is_national_comp:
             city_count = competition["city"].nunique()
             dist_count = competition["district"].nunique()
             st.caption(f"전국 데이터 ({city_count}개 시/도, {dist_count}개 지역) — 강원특별자치도 제외 (API 미지원)")
 
-            # 도시 selectbox (ctx_city 연동)
+            # 도시 selectbox (ctx_city 연동) — index= 방식으로 race condition 방지
+            # key= 없이 index= 만 사용: session_state에 직접 값을 쓰면 동일 run에서
+            # selectbox 반환값이 갱신되지 않는 Streamlit race condition을 우회
             _all_cities_cp = sorted(competition["city"].dropna().unique().tolist())
-            # ctx_city 변경 시 city 위젯 강제 동기화
+            _cp_options = ["전국"] + _all_cities_cp
             if st.session_state.get("_comp_last_ctx") != _ctx_city_cp:
                 st.session_state["_comp_last_ctx"] = _ctx_city_cp
-                if _ctx_city_cp and _ctx_city_cp in _all_cities_cp:
-                    st.session_state["comp_city_sel"] = _ctx_city_cp
-                else:
-                    st.session_state.pop("comp_city_sel", None)
-            _sel_city_cp = st.selectbox(
-                "시/도 선택", ["전국"] + _all_cities_cp,
-                key="comp_city_sel",
-            )
+                st.session_state["_comp_desired"] = (
+                    _ctx_city_cp if (_ctx_city_cp and _ctx_city_cp in _all_cities_cp) else "전국"
+                )
+            _desired_cp = st.session_state.get("_comp_desired", "전국")
+            _cp_idx = _cp_options.index(_desired_cp) if _desired_cp in _cp_options else 0
+            _sel_city_cp = st.selectbox("시/도 선택", _cp_options, index=_cp_idx)
+            st.session_state["_comp_desired"] = _sel_city_cp
             if _sel_city_cp != "전국":
                 comp_view = comp_view[comp_view["city"] == _sel_city_cp]
         else:
@@ -2368,7 +2370,7 @@ with tab_competition:
                     )
 
             # 전체 업종 비교 히트맵
-            _hm_city_sel = st.session_state.get("comp_city_sel", "전국")
+            _hm_city_sel = _sel_city_cp
             _hm_national = _is_national_comp and (_hm_city_sel == "전국")
 
             if _hm_national:
@@ -2656,7 +2658,7 @@ with tab_logistics:
             st.caption("전국 공공수요 분포를 바탕으로 최적 1·2·3티어 물류 허브 구조를 제안합니다.")
             _show_hub_ai = st.toggle("AI 전략 분석 시작", key="hub_ai_toggle")
             if _show_hub_ai:
-                _hub_ai_key = "hub_strategy_national"
+                _hub_ai_key = f"hub_strategy_{_logi_city_sel}_{_logi_cat_sel}"
                 if _hub_ai_key not in st.session_state.get("gemini_cache", {}):
                     with st.spinner("전국 수요 패턴 분석 중..."):
                         from src.recommendation.gemini_client import build_hub_strategy, HubStrategyContext
