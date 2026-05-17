@@ -34,6 +34,7 @@ TOP_ITEMS_PATH = _find_table("top_items_by_district_national.csv", "seoul_top_it
 FEATURE_PATH = TABLES_DIR / "feature_table_national.csv"
 COMPETITION_PATH = _find_table("national_competition_matrix.csv", "seoul_competition_matrix.csv")
 CONSUMER_FIT_PATH = _find_table("national_consumer_fit.csv", "seoul_consumer_fit.csv")
+MONTHLY_TREND_PATH = TABLES_DIR / "monthly_trend_national.csv"
 CLASSIFIED_PATH = PROCESSED_DIR / "bid_classified_national.csv"
 if not CLASSIFIED_PATH.exists():
     CLASSIFIED_PATH = PROCESSED_DIR / "seoul_bid_classified.csv"
@@ -1072,38 +1073,48 @@ div[data-testid="stHorizontalBlock"] .stButton > button {
             st.plotly_chart(fig_items, use_container_width=True)
 
     with bc2:
-        if not cleaned_all.empty and "posted_date" in cleaned_all.columns:
+        # 사전 집계 파일 우선 로드 (bid_cleaned_national.csv가 204MB라 git 미추적)
+        # outputs/tables/monthly_trend_national.csv는 git에 포함
+        if MONTHLY_TREND_PATH.exists():
+            trend = pd.read_csv(MONTHLY_TREND_PATH, encoding="utf-8-sig")
+            _period_label = (
+                f"{trend['연월'].min().replace('-', '.')} ~ {trend['연월'].max().replace('-', '.')}"
+                if not trend.empty else ""
+            )
+        elif not cleaned_all.empty and "posted_date" in cleaned_all.columns:
             trend = _cached_monthly_trend(cleaned_all)
-            # 수집 기간: 실제 공고일 기준
             _dt_series = pd.to_datetime(cleaned_all["posted_date"], errors="coerce")
             _dt_min, _dt_max = _dt_series.min(), _dt_series.max()
             _period_label = (
                 f"{_dt_min.strftime('%Y.%m')} ~ {_dt_max.strftime('%Y.%m')}"
                 if pd.notna(_dt_min) and pd.notna(_dt_max) else ""
             )
-            st.markdown(f"**월별 공고 추이**  <span style='font-size:11px;color:#94A3B8;'>수집 기간: {_period_label}</span>", unsafe_allow_html=True)
-            if not trend.empty:
-                import datetime as _dt_mod
-                _cutoff = (_dt_mod.date.today().replace(day=1) - _dt_mod.timedelta(days=1)).strftime("%Y-%m")
-                _trend_cut = trend[(trend["연월"] >= TREND_START_YM) & (trend["연월"] <= _cutoff)]
-                _trend_recent = _trend_cut if not _trend_cut.empty else trend.tail(18)
-                fig_trend = px.line(
-                    _trend_recent, x="연월", y="공고 수",
-                    labels={"연월": "", "공고 수": "공고 수"},
-                    color_discrete_sequence=["#3B82F6"],
-                    markers=True,
-                )
-                fig_trend.update_traces(marker_size=6, line_width=2)
-                fig_trend.update_xaxes(tickangle=45)
-                fig_trend.update_layout(
-                    height=300,
-                    margin={"r": 0, "t": 10, "l": 0, "b": 50},
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                )
-                st.plotly_chart(fig_trend, use_container_width=True)
         else:
-            st.markdown("**월별 공고 추이**")
+            trend = pd.DataFrame()
+            _period_label = ""
+
+        st.markdown(f"**월별 공고 추이**  <span style='font-size:11px;color:#94A3B8;'>수집 기간: {_period_label}</span>", unsafe_allow_html=True)
+        if not trend.empty:
+            import datetime as _dt_mod
+            _cutoff = (_dt_mod.date.today().replace(day=1) - _dt_mod.timedelta(days=1)).strftime("%Y-%m")
+            _trend_cut = trend[(trend["연월"] >= TREND_START_YM) & (trend["연월"] <= _cutoff)]
+            _trend_recent = _trend_cut if not _trend_cut.empty else trend.tail(18)
+            fig_trend = px.line(
+                _trend_recent, x="연월", y="공고 수",
+                labels={"연월": "", "공고 수": "공고 수"},
+                color_discrete_sequence=["#3B82F6"],
+                markers=True,
+            )
+            fig_trend.update_traces(marker_size=6, line_width=2)
+            fig_trend.update_xaxes(tickangle=45)
+            fig_trend.update_layout(
+                height=300,
+                margin={"r": 0, "t": 10, "l": 0, "b": 50},
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+            )
+            st.plotly_chart(fig_trend, use_container_width=True)
+        else:
             st.caption("공고 원천 데이터(posted_date) 없음")
 
     with bc3:
