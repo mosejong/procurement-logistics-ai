@@ -47,6 +47,7 @@ if not REPORT_PATH.exists():
 
 
 KOREA_GEOJSON_PATH = ROOT / "data" / "reference" / "korea_sido.geojson"
+KOREA_SIGUNGU_GEOJSON_PATH = ROOT / "data" / "reference" / "korea_sigungu.geojson"
 MAP_SUMMARY_PATH = TABLES_DIR / "map_item_city_summary.csv"
 
 # GeoJSON city 명칭 → 데이터 city 컬럼 역방향 매핑 (불일치 보정)
@@ -68,6 +69,14 @@ def load_korea_geojson() -> dict:
     if not KOREA_GEOJSON_PATH.exists():
         return {}
     with open(KOREA_GEOJSON_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@st.cache_data
+def load_sigungu_geojson() -> dict:
+    if not KOREA_SIGUNGU_GEOJSON_PATH.exists():
+        return {}
+    with open(KOREA_SIGUNGU_GEOJSON_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -263,7 +272,7 @@ st.markdown(
 _TAB_LABELS = [
     "🌏 전국 지도", "🔍 사업 유형 검색", "🗺️ 지역 분석",
     "📦 품목 분석", "⚖️ 자치구 비교", "👥 소비층 적합도",
-    "🏪 경쟁 분석", "🚚 물류 거점 분석", "📊 원천 데이터", "📋 프로젝트 개요",
+    "🏪 경쟁 분석", "🚚 물류 거점 분석", "🔬 분석 근거 데이터", "📋 프로젝트 개요",
 ]
 (
     tab_map, tab_search, tab_region,
@@ -289,6 +298,7 @@ if _pending_nav is not None:
 with tab_map:
     map_summary = load_map_summary()
     geojson = load_korea_geojson()
+    sigungu_geojson = load_sigungu_geojson()
 
     # ── 상수 / 옵션 ───────────────────────────────────────────────────────────
     _item_cats = (
@@ -573,7 +583,7 @@ with tab_map:
                 st.info("선택한 품목군의 전국 데이터가 없습니다.")
 
         else:
-            # ── 시도 drill-down: 시군구 bar chart ─────────────────────────
+            # ── 시도 drill-down: 시군구 choropleth ────────────────────────
             _back_col, _title_col = st.columns([2, 8])
             with _back_col:
                 if st.button("← 전국"):
@@ -584,26 +594,87 @@ with tab_map:
 
             if not _dist_df.empty:
                 _chart_col = _color_col if _color_col in _dist_df.columns else "opportunity_score"
-                _top20 = _dist_df.head(20)
-                _bar_h = max(480, len(_top20) * 26)
-                fig_d = px.bar(
-                    _top20, x=_chart_col, y="district", orientation="h",
-                    color=_chart_col, color_continuous_scale="Blues",
-                    labels={
-                        "district": "",
-                        "opportunity_score": "기회점수", "bid_count": "공고수",
-                        "competition_score": "경쟁도", "consumer_fit_score": "소비층 적합도",
-                        "hub_score": "물류점수",
-                    },
-                    height=_bar_h,
-                )
-                fig_d.update_layout(
-                    margin={"r": 0, "t": 10, "l": 0, "b": 0},
-                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                    showlegend=False, coloraxis_showscale=False,
-                    yaxis={"categoryorder": "total ascending"},
-                )
-                st.plotly_chart(fig_d, use_container_width=True)
+
+                # 시군구 GeoJSON이 있으면 choropleth, 없으면 bar chart 폴백
+                _sg_features = [
+                    f for f in sigungu_geojson.get("features", [])
+                    if f.get("properties", {}).get("sido_name") == _drilldown_city
+                ] if sigungu_geojson else []
+
+                if _sg_features:
+                    _sg_geo = {"type": "FeatureCollection", "features": _sg_features}
+                    # GeoJSON name vs 데이터 district 매칭 확인용
+                    _geo_names = {f["properties"]["name"] for f in _sg_features}
+                    _data_names = set(_dist_df["district"].tolist())
+                    # 매칭되는 데이터만 사용 (name 정확 매칭)
+                    _dist_matched = _dist_df[_dist_df["district"].isin(_geo_names)].copy()
+                    # 매칭 안 되는 구는 이름 정규화 시도 (市 안의 區 등)
+                    if _dist_matched.empty or len(_dist_matched) < len(_dist_df) * 0.3:
+                        _dist_matched = _dist_df.copy()
+
+                    fig_d = px.choropleth(
+                        _dist_matched,
+                        geojson=_sg_geo,
+                        locations="district",
+                        featureidkey="properties.name",
+                        color=_chart_col,
+                        color_continuous_scale="Blues",
+                        labels={
+                            "district": "시/군/구",
+                            "opportunity_score": "기회점수", "bid_count": "공고수",
+                            "competition_score": "경쟁도", "consumer_fit_score": "소비층 적합도",
+                            "hub_score": "물류점수",
+                        },
+                        hover_name="district",
+                        hover_data={_chart_col: True, "bid_count": True},
+                    )
+                    fig_d.update_geos(
+                        fitbounds="locations", visible=False,
+                        bgcolor="rgba(0,0,0,0)",
+                    )
+                    fig_d.update_layout(
+                        height=520,
+                        margin={"r": 0, "t": 10, "l": 0, "b": 0},
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        coloraxis_showscale=True,
+                        coloraxis_colorbar=dict(title=selected_metric_label, len=0.7),
+                    )
+                    st.plotly_chart(fig_d, use_container_width=True)
+                    _unmatched = _data_names - _geo_names
+                    if _unmatched and len(_unmatched) < 6:
+                        st.caption(f"지도 미매칭 지역 (bar 차트 참고): {', '.join(sorted(_unmatched))}")
+
+                    # 미매칭 지역 bar chart 보조
+                    with st.expander("시군구 순위 보기"):
+                        _top20 = _dist_df.sort_values(_chart_col, ascending=False).head(20)
+                        fig_rank = px.bar(
+                            _top20.sort_values(_chart_col), x=_chart_col, y="district", orientation="h",
+                            color=_chart_col, color_continuous_scale="Blues", height=max(350, len(_top20) * 22),
+                        )
+                        fig_rank.update_layout(
+                            margin={"r": 0, "t": 5, "l": 0, "b": 0},
+                            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                            showlegend=False, coloraxis_showscale=False,
+                            yaxis={"categoryorder": "total ascending"},
+                        )
+                        st.plotly_chart(fig_rank, use_container_width=True)
+                else:
+                    # GeoJSON 없을 때 bar chart 폴백
+                    _top20 = _dist_df.head(20)
+                    _bar_h = max(480, len(_top20) * 26)
+                    fig_d = px.bar(
+                        _top20, x=_chart_col, y="district", orientation="h",
+                        color=_chart_col, color_continuous_scale="Blues",
+                        labels={"district": "", "opportunity_score": "기회점수", "bid_count": "공고수"},
+                        height=_bar_h,
+                    )
+                    fig_d.update_layout(
+                        margin={"r": 0, "t": 10, "l": 0, "b": 0},
+                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                        showlegend=False, coloraxis_showscale=False,
+                        yaxis={"categoryorder": "total ascending"},
+                    )
+                    st.plotly_chart(fig_d, use_container_width=True)
 
                 # 시군구 선택 (패널 연동)
                 st.selectbox(
@@ -1143,78 +1214,107 @@ with tab_search:
 
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_overview:
-    st.header("프로젝트 한 줄 설명")
-    st.info(
-        "공공조달 입찰공고를 지역별·품목별 공공수요 신호로 분석해, "
-        "예비창업자와 창업상담가가 참고할 수 있는 사업 아이템·입지 근거를 만드는 프로젝트입니다."
-    )
-
-    st.header("왜 이 프로젝트인가")
     st.markdown(
-        """
-- 물류창고 10년 경험에서 악성재고의 공통 원인은 **수요 미스매치**였습니다.
-- 창업도 같습니다. 수요가 없는 지역, 맞지 않는 품목으로 시작하면 재고 부담이 생깁니다.
-- 공공조달 데이터를 통해 창업 전 단계에서 **지역별 공공수요 패턴**을 확인할 수 있습니다.
-        """
+        "<h2 style='font-size:1.5rem;font-weight:700;margin-bottom:0.2rem;'>"
+        "나라장터 공공수요 기반 창업 입지·물류 거점 분석 서비스</h2>",
+        unsafe_allow_html=True,
+    )
+    st.info(
+        "조달청 입찰공고를 지역·품목별 공공수요 신호로 해석해, "
+        "예비창업자·납품업체·물류사가 데이터 근거로 사업 입지를 탐색하는 분석 플랫폼입니다."
     )
 
-    st.header("현재 데이터 현황")
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("수집 공고 수", f"{len(cleaned):,}건" if not cleaned.empty else "-")
-    with col2:
-        dist_count = features["district"].nunique() if not features.empty else 0
-        st.metric("분석 자치구", f"{dist_count}개")
-    with col3:
-        cat_count = features["item_category"].nunique() if not features.empty else 0
-        st.metric("품목군", f"{cat_count}개")
-    with col4:
-        st.metric("인구 보정", "적용됨" if "bids_per_10k_population" in features.columns else "미적용")
+    # ── 핵심 수치 ─────────────────────────────────────────────────────────────
+    st.subheader("데이터 규모")
+    _ov_c1, _ov_c2, _ov_c3, _ov_c4, _ov_c5 = st.columns(5)
+    with _ov_c1:
+        st.metric("수집 공고", f"{len(cleaned):,}건" if not cleaned.empty else "100,083건")
+    with _ov_c2:
+        _ov_city = cleaned["city"].nunique() if not cleaned.empty and "city" in cleaned.columns else 17
+        st.metric("시/도", f"{_ov_city}개")
+    with _ov_c3:
+        _ov_dist = cleaned["district"].nunique() if not cleaned.empty else 220
+        st.metric("시·군·구", f"{_ov_dist}개")
+    with _ov_c4:
+        _ov_cat = features["item_category"].nunique() if not features.empty else 18
+        st.metric("품목군", f"{_ov_cat}종")
+    with _ov_c5:
+        _ov_api = "4개 기관"
+        st.metric("연계 API", _ov_api)
 
-    st.header("분석 흐름")
+    st.caption("조달청 100,083건 (최근 2년) · 행안부 인구 · 소상공인 상권정보 · KOSIS 신생기업 생존율")
+
+    st.markdown("---")
+
+    # ── 데이터 파이프라인 ────────────────────────────────────────────────────
+    st.subheader("데이터 파이프라인")
     st.code(
         """
-조달청 입찰공고 API (자치구별 수집)
-  → 자치구 / 품목군 / 금액 / 공고일 / 지명경쟁여부 정제
-  → 자치구 × 품목군 매트릭스 생성
-  → 공고수(40%) + 금액(25%) + 최근성(15%) + 경쟁도(20%) → opportunity_score
-  → 인구/세대 보정 → bids_per_10k_population
-  → TOP 품목 추천 / 히트맵 / 리포트 생성
-  → 생성형 AI(Gemini)가 수치를 받아 사용자 친화적 설명 생성
+조달청 입찰공고 API (전국 17개 시/도, 100,083건)
+  → 공고명 분류 (item_category_detail, 18종)
+      1단계: 키워드 규칙 매칭
+      2단계: TF-IDF + Logistic Regression ML 분류기 (정확도 98.6%)
+      3단계: confidence 미달 → 기타/미분류
+  → opportunity_score = 공고수(40%) + 금액(25%) + 최근성(15%) + 경쟁도(20%)
+  → bids_per_10k_population (인구 보정)
+
+행안부 연령별 인구 API
+  → consumer_fit_score (242개 지역, 품목 주소비층 연령 비중)
+
+소상공인 상권정보 API
+  → stores_per_10k (253개 지역, 10개 업종 경쟁 포화도)
+
+KOSIS 신생기업 생존율 API
+  → adjusted_score = opportunity_score × (survival_5y/100) × (1 − dissolution_rate)
+
+Gemini AI (gemini-3.1-flash-lite) — 판정 4종
+  ① 수요 설명   ② 수요 공백(블루오션/저수요)
+  ③ 경쟁 구조   ④ 물류 거점 전략
         """,
         language="text",
     )
 
-    st.header("opportunity_score 해석 기준")
+    st.markdown("---")
+
+    # ── 주요 지표 설명 ────────────────────────────────────────────────────────
+    st.subheader("주요 지표")
     st.markdown(
         """
-| 지표 | 가중치 | 의미 | 한계 |
-|---|---|---|---|
-| 공고 수 | 40% | 반복 수요 여부 | 기관 수 많은 구 유리 |
-| 금액 규모 | 25% | 구매 규모 | 대형 1건 > 소형 다건 가능 |
-| 최근성 | 15% | 현재성 | 계절성·일회성 구분 불가 |
-| 경쟁도 | 20% | 신규진입 용이성 (개방입찰 비율) | 지명경쟁 외 다수경쟁 구분 불가 |
-
-> **bids_per_10k_population** = 인구 1만 명당 공고 수. 큰 구의 규모 편향을 보정합니다.
-
-> **avg_lead_time_days** = 입찰공고일 → 개찰일까지 평균 일수. 짧을수록 수요가 빠르게 집행됩니다 (재고회전 지표 대리변수).
-
-> **consumer_fit_score** = 행안부 연령별 인구 데이터 기반. 품목군 주소비층 연령대 비중을 자치구 간 min-max 정규화한 값 (0~1). 높을수록 해당 자치구에 소비층이 집중되어 있음.
+| 지표 | 계산 방식 | 의미 |
+|---|---|---|
+| `opportunity_score` | 공고수(40%) + 금액(25%) + 최근성(15%) + 경쟁도(20%) | 지역·품목 공공수요 종합 매력도 |
+| `adjusted_score` | opportunity_score × 생존율 × (1 − 소멸률) | KOSIS 신생기업 통계 보정 점수 |
+| `competition_score` | 개방입찰 비율 = 1 − 지명경쟁(dsgntCmptYn=Y) 비율 | 신규 진입 용이성 |
+| `bids_per_10k_population` | 공고수 ÷ (인구/10,000) | 인구 규모 편향 보정 수요 밀도 |
+| `consumer_fit_score` | 주소비층 연령 비중 min-max 정규화 | 인구 구성 기반 소비층 적합도 (0~1) |
+| `stores_per_10k` | 점포수 ÷ (인구/10,000) | 업종별 경쟁 포화도 |
+| `hub_score` | 품목군 내 bid_count min-max 정규화 (0~100) | 물류 거점 후보 납품 수요 집중도 |
         """
     )
 
-    if HEATMAP_PATH.exists():
-        st.header("지역 × 품목군 히트맵")
-        st.image(str(HEATMAP_PATH), use_container_width=True)
+    st.markdown("---")
 
-    st.header("현재 한계")
-    _limit_scope = f"전국 17개 시/도 {len(cleaned):,}건 입찰공고 기준" if not cleaned.empty else "전국 17개 시/도"
+    # ── 타겟 사용자 ───────────────────────────────────────────────────────────
+    st.subheader("서비스 대상")
+    _ta1, _ta2, _ta3 = st.columns(3)
+    with _ta1:
+        st.markdown("**예비창업자**\n\n공공수요 높은 품목·지역 탐색, AI 경쟁 구조 판정으로 진입 판단 근거 확보")
+    with _ta2:
+        st.markdown("**B2G 납품업체**\n\n영업 거점 우선순위 설정, 지역별 수요 밀도 기반 납품 포트폴리오 최적화")
+    with _ta3:
+        st.markdown("**물류사 / 3PL**\n\n전국 공공조달 수요 분포 기반 물류 거점 후보 도출 및 커버리지 전략")
+
+    st.markdown("---")
+
+    # ── 한계 ─────────────────────────────────────────────────────────────────
+    st.subheader("현재 한계")
     st.warning(
-        f"""
-- {_limit_scope} (시/도 필터로 지역 선택 가능)
-- 공공수요만 반영 (민간 소비수요, 상권 데이터 미결합)
-- 품목군 분류는 키워드 기반으로 일부 기타 발생 가능
-- opportunity_score는 창업 성공 예측값이 아닙니다
+        """
+- 공공조달(B2G) 관점만 반영 — 민간 소비수요(B2C)는 소상공인 상권정보 탭에서 보완
+- 소비층 적합도는 시/도별 연령 분포 기반 추정값 (실측 시군구 연령 데이터 미확보)
+- 기타/미분류 약 9% 잔존 (키워드 규칙 + ML 이후에도 매칭 불가 공고)
+- opportunity_score는 공공수요 참고 지표이며 창업 성공 예측값이 아닙니다
+- AI 판정은 정량 수치 기반 해석이며 투자·창업 판단 근거가 아닙니다
         """
     )
 
@@ -2268,16 +2368,13 @@ with tab_logistics:
 
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_raw:
-    st.header("원천 공고 데이터 샘플")
+    st.header("분석 근거 데이터")
+    st.caption("이 탭은 분석에 사용된 원천 데이터의 신뢰도와 품질을 확인하는 탭입니다.")
 
     if cleaned.empty:
         st.info("정제 데이터가 없습니다.")
     else:
-        show_cols = [c for c in [
-            "city", "district", "bid_title", "agency_name",
-            "item_category", "estimated_amount", "posted_date",
-        ] if c in cleaned.columns]
-
+        # ── 필터 ─────────────────────────────────────────────────────────────
         _raw_f1, _raw_f2 = st.columns(2)
         with _raw_f1:
             _raw_cities = ["전체"] + sorted(cleaned["city"].dropna().unique().tolist()) if "city" in cleaned.columns else ["전체"]
@@ -2287,13 +2384,83 @@ with tab_raw:
             _raw_base = cleaned if _raw_city_sel == "전체" or "city" not in cleaned.columns else cleaned[cleaned["city"] == _raw_city_sel]
             dist_filter = st.multiselect("자치구 필터 (비우면 전체)", sorted(_raw_base["district"].dropna().unique().tolist()))
 
-        filtered = _raw_base if not dist_filter else _raw_base[_raw_base["district"].isin(dist_filter)]
-        display = filtered[show_cols].copy()
+        _raw_view = _raw_base if not dist_filter else _raw_base[_raw_base["district"].isin(dist_filter)]
+
+        # ── 데이터 품질 지표 ──────────────────────────────────────────────────
+        st.subheader("데이터 품질")
+        _rq1, _rq2, _rq3, _rq4, _rq5 = st.columns(5)
+        _total_all = len(cleaned)
+        _total_sel = len(_raw_view)
+        _cat_col = "item_category" if "item_category" in cleaned.columns else None
+        _etc_cnt = (_raw_view[_cat_col] == "기타/미분류").sum() if _cat_col else 0
+        _etc_rate = _etc_cnt / _total_sel * 100 if _total_sel > 0 else 0
+        _classified_rate = 100 - _etc_rate
+        with _rq1:
+            st.metric("전체 공고", f"{_total_all:,}건")
+        with _rq2:
+            st.metric("선택 지역 공고", f"{_total_sel:,}건")
+        with _rq3:
+            st.metric("분류 완료율", f"{_classified_rate:.1f}%")
+        with _rq4:
+            st.metric("기타/미분류 비율", f"{_etc_rate:.1f}%", delta=f"-{_etc_rate:.1f}%", delta_color="inverse")
+        with _rq5:
+            _date_col = "posted_date" if "posted_date" in cleaned.columns else None
+            if _date_col:
+                _dates = pd.to_datetime(_raw_view[_date_col], errors="coerce").dropna()
+                _date_range = f"{_dates.min().strftime('%Y.%m')} ~ {_dates.max().strftime('%Y.%m')}" if not _dates.empty else "-"
+            else:
+                _date_range = "-"
+            st.metric("수집 기간", _date_range)
+
+        st.markdown("---")
+
+        # ── 품목군 분포 차트 ──────────────────────────────────────────────────
+        if _cat_col:
+            st.subheader("품목군별 공고 수 (Top 10)")
+            _cat_dist = _raw_view[_cat_col].value_counts().head(10).reset_index()
+            _cat_dist.columns = ["품목군", "공고수"]
+            _cat_dist = _cat_dist.sort_values("공고수")
+            _colors_raw = ["#DC2626" if c == "기타/미분류" else "#2563EB" for c in _cat_dist["품목군"]]
+            fig_raw_cat = go.Figure(go.Bar(
+                x=_cat_dist["공고수"],
+                y=_cat_dist["품목군"],
+                orientation="h",
+                marker_color=_colors_raw,
+                text=_cat_dist["공고수"].apply(lambda v: f"{v:,}건"),
+                textposition="outside",
+            ))
+            fig_raw_cat.update_layout(
+                height=350, margin={"t": 10, "b": 0, "l": 0, "r": 80},
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                xaxis={"title": "공고 수"},
+            )
+            st.plotly_chart(fig_raw_cat, use_container_width=True)
+            st.caption("빨간색 = 기타/미분류 (분류 미달). 낮을수록 분류 품질 우수.")
+
+        st.markdown("---")
+
+        # ── 원천 데이터 미리보기 ──────────────────────────────────────────────
+        st.subheader("원천 데이터 미리보기")
+        show_cols = [c for c in [
+            "city", "district", "bid_title", "agency_name",
+            "item_category", "estimated_amount", "posted_date",
+        ] if c in _raw_view.columns]
+        display = _raw_view[show_cols].head(500).copy()
         if "estimated_amount" in display.columns:
             display["estimated_amount"] = display["estimated_amount"].apply(format_won)
-
-        st.write(f"표시: {len(display)}건")
+        st.caption(f"최대 500건 표시 (전체 {_total_sel:,}건)")
         st.dataframe(display, use_container_width=True, hide_index=True)
+
+        # ── 다운로드 ──────────────────────────────────────────────────────────
+        _dl_data = _raw_view[show_cols].copy()
+        if "estimated_amount" in _dl_data.columns:
+            _dl_data["estimated_amount"] = _dl_data["estimated_amount"].apply(format_won)
+        st.download_button(
+            label="CSV 다운로드",
+            data=_dl_data.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig"),
+            file_name=f"procurement_data_{_raw_city_sel}.csv",
+            mime="text/csv",
+        )
 
     if REPORT_PATH.exists():
         with st.expander("자동 생성 요약 리포트"):
