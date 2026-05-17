@@ -214,6 +214,15 @@ def main(cities: list[str] | None = None) -> None:
     report_path = _write_national_summary(matrix, top_items)
     print(f"리포트 저장: {report_path}")
 
+    # 전국 수집 완료 시 metadata.json 자동 갱신
+    if suffix == "national":
+        try:
+            from src.collect.update_metadata import update_metadata
+            print("\n=== metadata.json 갱신 ===")
+            update_metadata()
+        except Exception as e:
+            print(f"[warn] metadata 갱신 실패: {e}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="전국 입찰공고 수집 스크립트")
