@@ -834,6 +834,10 @@ with tab_map:
                     key="district_select",
                     help="선택 시 우측 패널에 상세 지표 표시",
                 )
+                # 선택된 구를 ctx_district에 동기화 → 다른 탭에서 자동 적용
+                _cur_dist_sel = st.session_state.get("district_select")
+                if _cur_dist_sel:
+                    st.session_state["ctx_district"] = _cur_dist_sel
             else:
                 st.info(f"{_drilldown_city}의 {selected_cat} 데이터가 없습니다.")
 
@@ -1557,6 +1561,15 @@ with tab_region:
                 _filtered = [d for d in districts if d in _geo_wl]
                 if len(_filtered) >= 3:
                     districts = _filtered
+            # ctx_district 변경 시 district 위젯 강제 동기화
+            _ctx_dist_r = st.session_state.get("ctx_district")
+            if (
+                _ctx_dist_r
+                and _ctx_dist_r in districts
+                and st.session_state.get("_region_last_dist_ctx") != _ctx_dist_r
+            ):
+                st.session_state["_region_last_dist_ctx"] = _ctx_dist_r
+                st.session_state["region_tab_district"] = _ctx_dist_r
             selected = st.selectbox("시군구 선택", districts, key="region_tab_district")
 
         result = _city_data[_city_data["district"] == selected].sort_values("opportunity_score", ascending=False)
@@ -1593,7 +1606,7 @@ with tab_region:
                     hovertemplate="<b>%{y}</b><br>기회점수: %{x:.2f}<br>공고수: %{text}<extra></extra>",
                 ))
                 fig_reg.update_layout(
-                    height=max(320, len(_r_sorted) * 28),
+                    height=min(max(280, len(_r_sorted) * 24), 480),
                     margin={"t": 10, "b": 0, "l": 0, "r": 60},
                     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                     xaxis_title="기회점수",
