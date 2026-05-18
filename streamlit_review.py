@@ -1100,6 +1100,7 @@ with tab_map:
                     if st.button("지역 분석 탭에서 보기", use_container_width=True):
                         st.session_state["ctx_city"] = _drilldown_city
                         st.session_state["ctx_district"] = _sel_dist
+                        st.session_state["district_select"] = _sel_dist  # rerun 시 덮어쓰기 방지
                         st.session_state["ctx_cat"] = selected_cat
                         st.session_state["_nav_tab_idx"] = 2
                         st.rerun()
