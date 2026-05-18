@@ -791,12 +791,17 @@ with tab_map:
                         color_continuous_scale="Blues",
                         labels={
                             "district": "시/군/구",
-                            "opportunity_score": "기회점수", "bid_count": "공고수",
+                            "opportunity_score": "기회점수", "adjusted_score": "보정 점수",
+                            "bid_count": "공고수",
                             "competition_score": "경쟁도", "consumer_fit_score": "소비층 적합도",
                             "hub_score": "물류점수",
                         },
                         hover_name="district",
-                        hover_data={_chart_col: True, "bid_count": True},
+                        hover_data={
+                            _chart_col: True,
+                            **( {"adjusted_score": True} if _chart_col != "adjusted_score" and "adjusted_score" in _dist_matched.columns else {} ),
+                            "bid_count": True,
+                        },
                     )
                     # 시도별 명시 좌표 범위 (fitbounds 단독으로 zoom 안 되는 경우 보완)
                     _SIDO_BOUNDS: dict[str, tuple] = {
@@ -909,6 +914,21 @@ with tab_map:
                         unsafe_allow_html=True,
                     )
                     st.plotly_chart(_make_row_gauges(_metrics_g), use_container_width=True, key="gauge_row")
+                    _glabel_cols = st.columns(4)
+                    _glabels = [
+                        ("① 기회점수",     "공고수·금액·최근성·경쟁도 종합"),
+                        ("② 소비층 적합도", "주소비 연령층 인구 비중"),
+                        ("③ 경쟁도",       "개방입찰 비율 — 높을수록 신규진입 유리"),
+                        ("④ 물류 점수",    "납품 수요 집중도 (0~100)"),
+                    ]
+                    for _glc, (_gname, _gdesc) in zip(_glabel_cols, _glabels):
+                        with _glc:
+                            st.markdown(
+                                f'<div style="text-align:center;margin-top:-8px;">'
+                                f'<span style="font-size:11px;font-weight:700;color:#334155;">{_gname}</span><br>'
+                                f'<span style="font-size:10px;color:#64748B;">{_gdesc}</span></div>',
+                                unsafe_allow_html=True,
+                            )
             else:
                 st.info(f"{_drilldown_city}의 {selected_cat} 데이터가 없습니다.")
 
