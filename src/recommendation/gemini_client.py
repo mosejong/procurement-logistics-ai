@@ -494,3 +494,120 @@ def _fallback_summary(ctx: DemandContext, error: str = "") -> str:
     if error:
         lines.append(f"_(AI 해석 생성 실패: {error[:60]})_")
     return " ".join(lines)
+
+
+# ── 지역 비교 AI 분석 ──────────────────────────────────────────────
+
+_COMPARE_SYSTEM = """당신은 공공조달 입찰공고 데이터를 분석하는 중립적인 데이터 해석가입니다.
+두 지역의 공공조달 수요 포트폴리오를 비교해 예비창업자·납품업체가 참고할 수 있는 설명을 제공합니다.
+
+반드시 지켜야 할 규칙:
+- 창업 성공을 예측하거나 보장하는 표현 금지
+- "유망합니다", "추천합니다" 같은 판단형 표현 금지
+- 두 지역의 수요 구조 차이를 수치 중심으로 설명
+- 4~6문장, 한국어로 간결하게
+- 어느 지역이 어떤 품목군에 집중되어 있는지 구체적으로 언급"""
+
+_COMPARE_TEMPLATE = """두 지역의 공공조달 수요 포트폴리오 비교입니다.
+
+[{label_a}]
+{items_a}
+
+[{label_b}]
+{items_b}
+
+A 지역이 우세한 품목군: {dominant_a}
+B 지역이 우세한 품목군: {dominant_b}
+
+위 데이터를 바탕으로 두 지역의 공공조달 수요 구조 차이를 설명해주세요.
+어떤 지역이 어떤 품목군에 수요가 집중되어 있는지, 두 지역의 포트폴리오 특성 차이를 중심으로 서술하세요."""
+
+
+@dataclass
+class CompareContext:
+    dist_a: str
+    dist_b: str
+    city_a: str
+    city_b: str
+    items_a: list[dict]   # [{"item": str, "bid_count": int, "score": float}]
+    items_b: list[dict]
+    dominant_a: list[str]  # A가 우세한 품목군
+    dominant_b: list[str]  # B가 우세한 품목군
+
+
+def build_compare_summary(ctx: CompareContext) -> str:
+    """두 지역 공공조달 수요 포트폴리오 비교 AI 설명"""
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    if not api_key:
+        return _compare_fallback(ctx)
+
+    def _fmt_items(items: list[dict]) -> str:
+        return "\n".join(
+            f"  - {d['item']}: {d['bid_count']}건, 수요점수 {d['score']:.1f}"
+            for d in items[:6]
+        )
+
+    label_a = f"{ctx.city_a} {ctx.dist_a}" if ctx.city_a else ctx.dist_a
+    label_b = f"{ctx.city_b} {ctx.dist_b}" if ctx.city_b else ctx.dist_b
+
+    prompt = _COMPARE_TEMPLATE.format(
+        label_a=label_a,
+        label_b=label_b,
+        items_a=_fmt_items(ctx.items_a),
+        items_b=_fmt_items(ctx.items_b),
+        dominant_a=", ".join(ctx.dominant_a[:4]) or "없음",
+        dominant_b=", ".join(ctx.dominant_b[:4]) or "없음",
+    )
+
+    try:
+        from google import genai
+        from google.genai import types
+        import time
+
+        client = genai.Client(api_key=api_key)
+        for attempt in range(3):
+            try:
+                response = client.models.generate_content(
+                    model="gemini-3.1-flash-lite",
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=_COMPARE_SYSTEM,
+                        max_output_tokens=400,
+                        temperature=0.3,
+                    ),
+                )
+                text = "".join(
+                    part.text for part in response.candidates[0].content.parts
+                    if hasattr(part, "text") and part.text
+                )
+                if text.strip():
+                    return text.strip()
+            except Exception as e:
+                if "503" in str(e) and attempt < 2:
+                    time.sleep(2 * (attempt + 1))
+                    continue
+                return _compare_fallback(ctx, error=str(e))
+
+    except Exception as e:
+        return _compare_fallback(ctx, error=str(e))
+
+    return _compare_fallback(ctx)
+
+
+def _compare_fallback(ctx: CompareContext, error: str = "") -> str:
+    label_a = f"{ctx.city_a} {ctx.dist_a}" if ctx.city_a else ctx.dist_a
+    label_b = f"{ctx.city_b} {ctx.dist_b}" if ctx.city_b else ctx.dist_b
+    lines = [f"**{label_a} vs {label_b} 수요 포트폴리오 비교**"]
+    if ctx.dominant_a:
+        lines.append(f"- {label_a} 우세 품목: {', '.join(ctx.dominant_a[:3])}")
+    if ctx.dominant_b:
+        lines.append(f"- {label_b} 우세 품목: {', '.join(ctx.dominant_b[:3])}")
+    top_a = ctx.items_a[0] if ctx.items_a else None
+    top_b = ctx.items_b[0] if ctx.items_b else None
+    if top_a:
+        lines.append(f"- {label_a} 최다 수요: {top_a['item']} ({top_a['bid_count']}건)")
+    if top_b:
+        lines.append(f"- {label_b} 최다 수요: {top_b['item']} ({top_b['bid_count']}건)")
+    if error:
+        lines.append(f"_(AI 분석 실패: {error[:60]})_")
+    return "\n".join(lines)

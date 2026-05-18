@@ -2084,6 +2084,39 @@ with tab_compare:
                         )
                         st.plotly_chart(_fig_pie, use_container_width=True)
 
+        # AI 비교 분석
+        st.subheader("🤖 AI 지역 비교 해석")
+        st.caption("조달청 입찰공고 데이터 기반 설명입니다. 창업 성공을 예측하지 않으며 참고 지표로만 활용하세요.")
+        _cmp_ai_key = f"compare_{dist_a}_{dist_b}"
+        if _cmp_ai_key not in st.session_state.get("gemini_cache", {}):
+            if st.button("🤖 AI 비교 분석 실행", key=f"btn_{_cmp_ai_key}"):
+                with st.spinner("두 지역 수요 포트폴리오 비교 분석 중..."):
+                    from src.recommendation.gemini_client import build_compare_summary, CompareContext
+                    _dom_a = [r["품목군"] for r in rows if r["우세 지역"] == dist_a]
+                    _dom_b = [r["품목군"] for r in rows if r["우세 지역"] == dist_b]
+                    _items_a = sorted(
+                        [{"item": r["품목군"], "bid_count": r[f"{dist_a} 공고수"], "score": r[f"{dist_a} 점수"]}
+                         for r in rows if r[f"{dist_a} 공고수"] > 0],
+                        key=lambda x: -x["bid_count"],
+                    )
+                    _items_b = sorted(
+                        [{"item": r["품목군"], "bid_count": r[f"{dist_b} 공고수"], "score": r[f"{dist_b} 점수"]}
+                         for r in rows if r[f"{dist_b} 공고수"] > 0],
+                        key=lambda x: -x["bid_count"],
+                    )
+                    _cctx = CompareContext(
+                        dist_a=dist_a, dist_b=dist_b,
+                        city_a=city_a_label, city_b=city_b_label,
+                        items_a=_items_a, items_b=_items_b,
+                        dominant_a=_dom_a, dominant_b=_dom_b,
+                    )
+                    if "gemini_cache" not in st.session_state:
+                        st.session_state["gemini_cache"] = {}
+                    st.session_state["gemini_cache"][_cmp_ai_key] = build_compare_summary(_cctx)
+                    st.rerun()
+        if _cmp_ai_key in st.session_state.get("gemini_cache", {}):
+            st.markdown(st.session_state["gemini_cache"][_cmp_ai_key])
+
         # 상세 비교표 (아래)
         st.subheader("품목군별 상세 비교")
         st.dataframe(compare_df, use_container_width=True, hide_index=True)
