@@ -1071,59 +1071,68 @@ with tab_map:
 
         else:
             # ── 드릴다운 패널 ──────────────────────────────────────────────
-            st.markdown(f"### {_drilldown_city}")
-
+            _sel_dist = st.session_state.get("district_select")
             _city_row = (
                 _map_df[_map_df["city"] == _drilldown_city]
                 if not _map_df.empty else pd.DataFrame()
             )
-            if not _city_row.empty:
-                _cr = _city_row.iloc[0]
+
+            if _sel_dist and not _dist_df.empty and _sel_dist in _dist_df["district"].values:
+                # ── 시군구 선택됨 → 시군구 중심 표시 ─────────────────────
+                _dr = _dist_df[_dist_df["district"] == _sel_dist].iloc[0]
+                st.markdown(f"### {_sel_dist}")
+                _jlbl = _dr.get("judgment_label", "기회 검토")
+                _jc = _LABEL_COLOR.get(_jlbl, "#78716C")
+                st.markdown(
+                    f'<span style="background:{_jc}20;color:{_jc};padding:4px 14px;'
+                    f'border-radius:12px;font-size:13px;font-weight:700;">{_jlbl}</span>',
+                    unsafe_allow_html=True,
+                )
+                st.markdown("")
                 pa, pb = st.columns(2)
                 with pa:
-                    st.metric("기회점수", f"{_cr.get('opportunity_score', 0):.1f}점")
+                    _opp_d = _dr.get("opportunity_score") or 0
+                    st.metric("기회점수", f"{_opp_d:.1f}점")
                 with pb:
-                    st.metric("공고 건수", f"{int(_cr.get('bid_count', 0)):,}건")
-
-            if not _dist_df.empty:
-                st.divider()
-                st.markdown("**상위 시군구**")
-                _ds_col = _color_col if _color_col in _dist_df.columns else "opportunity_score"
-                for _i, _row in enumerate(_dist_df.head(3).itertuples()):
-                    _val = getattr(_row, _ds_col, 0)
-                    _vstr = f"{_val:.1f}" if isinstance(_val, float) else f"{int(_val):,}"
-                    _lc = "#16A34A" if _i == 0 else "#2563EB"
-                    st.markdown(
-                        f'<div style="background:#F8FAFC;border:1px solid #E2E8F0;'
-                        f'border-radius:8px;padding:8px 12px;margin-bottom:6px;">'
-                        f'<span style="color:{_lc};font-weight:700;">{_i+1}위</span> '
-                        f'<b>{_row.district}</b>'
-                        f'<span style="float:right;color:{COLOR_PRIMARY};font-weight:600;">{_vstr}</span></div>',
-                        unsafe_allow_html=True,
-                    )
-
-                _sel_dist = st.session_state.get("district_select")
-                if _sel_dist and _sel_dist in _dist_df["district"].values:
-                    _dr = _dist_df[_dist_df["district"] == _sel_dist].iloc[0]
-                    st.divider()
-                    st.markdown(f"**{_sel_dist}** 상세")
-                    _jlbl = _dr.get("judgment_label", "기회 검토")
-                    _jc = _LABEL_COLOR.get(_jlbl, "#78716C")
-                    st.markdown(
-                        f'<span style="background:{_jc}20;color:{_jc};padding:3px 12px;'
-                        f'border-radius:10px;font-size:13px;font-weight:700;">{_jlbl}</span>',
-                        unsafe_allow_html=True,
-                    )
                     st.metric("공고수", f"{int(_dr.get('bid_count', 0)):,}건")
+                if "consumer_fit_score" in _dr and pd.notna(_dr.get("consumer_fit_score")):
+                    st.metric("소비층 적합도", f"{_dr['consumer_fit_score']:.2f}")
+                st.divider()
+                if st.button("지역 분석 탭에서 보기", use_container_width=True):
+                    st.session_state["ctx_city"] = _drilldown_city
+                    st.session_state["ctx_district"] = _sel_dist
+                    st.session_state["ctx_cat"] = selected_cat
+                    st.session_state["_nav_tab_idx"] = 2
+                    st.session_state["_skip_dist_sync"] = True
+                    st.rerun()
 
+            else:
+                # ── 미선택 → 시도 합계 표시 ───────────────────────────────
+                st.markdown(f"### {_drilldown_city}")
+                if not _city_row.empty:
+                    _cr = _city_row.iloc[0]
+                    pa, pb = st.columns(2)
+                    with pa:
+                        st.metric("기회점수", f"{_cr.get('opportunity_score', 0):.1f}점")
+                    with pb:
+                        st.metric("공고 건수", f"{int(_cr.get('bid_count', 0)):,}건")
+
+                if not _dist_df.empty:
                     st.divider()
-                    if st.button("지역 분석 탭에서 보기", use_container_width=True):
-                        st.session_state["ctx_city"] = _drilldown_city
-                        st.session_state["ctx_district"] = _sel_dist
-                        st.session_state["ctx_cat"] = selected_cat
-                        st.session_state["_nav_tab_idx"] = 2
-                        st.session_state["_skip_dist_sync"] = True  # col_map_area 덮어쓰기 방지
-                        st.rerun()
+                    st.markdown("**상위 시군구**")
+                    _ds_col = _color_col if _color_col in _dist_df.columns else "opportunity_score"
+                    for _i, _row in enumerate(_dist_df.head(3).itertuples()):
+                        _val = getattr(_row, _ds_col, 0)
+                        _vstr = f"{_val:.1f}" if isinstance(_val, float) else f"{int(_val):,}"
+                        _lc = "#16A34A" if _i == 0 else "#2563EB"
+                        st.markdown(
+                            f'<div style="background:#F8FAFC;border:1px solid #E2E8F0;'
+                            f'border-radius:8px;padding:8px 12px;margin-bottom:6px;">'
+                            f'<span style="color:{_lc};font-weight:700;">{_i+1}위</span> '
+                            f'<b>{_row.district}</b>'
+                            f'<span style="float:right;color:{COLOR_PRIMARY};font-weight:600;">{_vstr}</span></div>',
+                            unsafe_allow_html=True,
+                        )
 
     # ── 전체 너비 탭 이동 버튼 ────────────────────────────────────────────────
     st.markdown("""
