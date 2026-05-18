@@ -552,7 +552,7 @@ with tab_map:
         fig = make_subplots(
             rows=rows, cols=cols,
             specs=specs,
-            vertical_spacing=0.18,
+            vertical_spacing=0.05,
             horizontal_spacing=0.08,
         )
         _num = ["①", "②", "③", "④", "⑤", "⑥"]
@@ -581,6 +581,41 @@ with tab_map:
         fig.update_layout(
             height=130 * rows,
             margin={"t": 20, "b": 0, "l": 5, "r": 5},
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+        return fig
+
+    def _make_row_gauges(metrics: list) -> go.Figure:
+        """(label, value_0_100, color, invert) → 1×N 가로 배열 게이지 (지도 하단용)"""
+        n = len(metrics)
+        specs = [[{"type": "indicator"} for _ in range(n)]]
+        fig = make_subplots(rows=1, cols=n, specs=specs, horizontal_spacing=0.04)
+        _num = ["①", "②", "③", "④"]
+        for idx, (label, val, color, invert) in enumerate(metrics):
+            v = min(max(float(val or 0), 0), 100)
+            bar_color = (
+                ("#16A34A" if v < 40 else ("#F59E0B" if v < 70 else "#DC2626"))
+                if invert else color
+            )
+            _titled = f"{_num[idx]} {label}" if idx < len(_num) else label
+            fig.add_trace(go.Indicator(
+                mode="gauge+number",
+                value=v,
+                title={"text": _titled, "font": {"size": 12, "color": "#475569"}},
+                gauge={
+                    "axis": {"range": [0, 100], "showticklabels": False, "ticks": ""},
+                    "bar": {"color": bar_color, "thickness": 0.55},
+                    "bgcolor": "#F1F5F9",
+                    "borderwidth": 0,
+                    "steps": [{"range": [0, 100], "color": "#F1F5F9"}],
+                    "shape": "angular",
+                },
+                number={"font": {"size": 18, "color": "#1E293B"}},
+            ), row=1, col=idx + 1)
+        fig.update_layout(
+            height=145,
+            margin={"t": 35, "b": 0, "l": 5, "r": 5},
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
         )
@@ -794,7 +829,7 @@ with tab_map:
                     else:
                         fig_d.update_geos(fitbounds="locations", visible=False, bgcolor="rgba(0,0,0,0)")
                     fig_d.update_layout(
-                        height=625,
+                        height=440,
                         margin={"r": 0, "t": 10, "l": 0, "b": 0},
                         paper_bgcolor="rgba(0,0,0,0)",
                         coloraxis_showscale=True,
@@ -842,12 +877,38 @@ with tab_map:
                     "시군구 상세 보기",
                     _dist_df["district"].tolist(),
                     key="district_select",
-                    help="선택 시 우측 패널에 상세 지표 표시",
+                    help="선택 시 지도 아래 지표 표시",
                 )
                 # 선택된 구를 ctx_district에 동기화 → 다른 탭에서 자동 적용
                 _cur_dist_sel = st.session_state.get("district_select")
                 if _cur_dist_sel:
                     st.session_state["ctx_district"] = _cur_dist_sel
+
+                # ── 지도 아래 1×4 가로 게이지 ──────────────────────────────
+                _sel_dist_g = st.session_state.get("district_select") or (
+                    _dist_df.iloc[0]["district"] if not _dist_df.empty else None
+                )
+                if _sel_dist_g and _sel_dist_g in _dist_df["district"].values:
+                    _dr_g = _dist_df[_dist_df["district"] == _sel_dist_g].iloc[0]
+
+                    def _safe_g(val, mul=1.0, cap=100.0):
+                        v = val if not pd.isna(val) else 0.0
+                        return min(float(v) * mul, cap)
+
+                    _opp_raw_g = _dr_g.get("opportunity_score") or 0
+                    _opp100_g = _safe_g(_opp_raw_g, 100.0 / max(_dist_df["opportunity_score"].max(), 1))
+                    _metrics_g = [("기회점수", _opp100_g, COLOR_PRIMARY, False)]
+                    if "consumer_fit_score" in _dist_df.columns:
+                        _metrics_g.append(("소비층 적합도", _safe_g(_dr_g.get("consumer_fit_score"), 100.0), COLOR_PURPLE, False))
+                    if "competition_score" in _dist_df.columns:
+                        _metrics_g.append(("경쟁도", _safe_g(_dr_g.get("competition_score"), 100.0), COLOR_BAD, True))
+                    _metrics_g.append(("물류 점수", _safe_g(_dr_g.get("hub_score")), COLOR_GOOD, False))
+                    st.markdown(
+                        f'<p style="font-size:12px;font-weight:600;color:#475569;margin:4px 0 0 0;">'
+                        f'{_sel_dist_g} 상세 지표</p>',
+                        unsafe_allow_html=True,
+                    )
+                    st.plotly_chart(_make_row_gauges(_metrics_g), use_container_width=True, key="gauge_row")
             else:
                 st.info(f"{_drilldown_city}의 {selected_cat} 데이터가 없습니다.")
 
@@ -1014,32 +1075,6 @@ with tab_map:
                         unsafe_allow_html=True,
                     )
                     st.metric("공고수", f"{int(_dr.get('bid_count', 0)):,}건")
-
-                    # 드릴다운 패널 게이지 차트
-                    def _safe(val, mul=1.0, cap=100.0):
-                        v = val if not pd.isna(val) else 0.0
-                        return min(float(v) * mul, cap)
-
-                    _opp_raw = _dr.get("opportunity_score") or 0
-                    _opp100_d = _safe(_opp_raw, 100.0 / max(_dist_df["opportunity_score"].max(), 1))
-                    _metrics_dd = [("기회점수", _opp100_d, COLOR_PRIMARY, False)]
-                    if "consumer_fit_score" in _dist_df.columns:
-                        _cf100_d = _safe(_dr.get("consumer_fit_score"), 100.0)
-                        _metrics_dd.append(("소비층 적합도", _cf100_d, COLOR_PURPLE, False))
-                    if "competition_score" in _dist_df.columns:
-                        _comp100_d = _safe(_dr.get("competition_score"), 100.0)
-                        _metrics_dd.append(("경쟁도", _comp100_d, COLOR_BAD, True))
-                    _metrics_dd.append(("물류 점수", _safe(_dr.get("hub_score")), COLOR_GOOD, False))
-                    st.plotly_chart(_make_panel_gauges(_metrics_dd), use_container_width=True, key="gauge_dd")
-                    st.markdown(
-                        "<div style='font-size:10px;color:#64748B;line-height:1.6;margin:-4px 0 4px 0'>"
-                        "① <b>기회점수</b>: 공고수·금액·최근성·경쟁도 종합 &nbsp;"
-                        "② <b>소비층 적합도</b>: 주소비 연령층 매칭 (0~100) &nbsp;"
-                        "③ <b>경쟁도</b>: 개방입찰 비율 — 높을수록 신규진입 유리 &nbsp;"
-                        "④ <b>물류점수</b>: 납품 수요 집중도 (0~100)"
-                        "</div>",
-                        unsafe_allow_html=True,
-                    )
 
                     st.divider()
                     if st.button("지역 분석 탭에서 보기", use_container_width=True):
