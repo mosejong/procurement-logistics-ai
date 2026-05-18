@@ -877,10 +877,12 @@ with tab_map:
                     )
                     st.plotly_chart(fig_d, use_container_width=True)
 
-                # 시군구 선택 (패널 연동)
+                # 시군구 선택 (패널 연동) — None 옵션으로 미선택 상태 지원
+                _dist_opts = [None] + _dist_df["district"].tolist()
                 st.selectbox(
                     "시군구 상세 보기",
-                    _dist_df["district"].tolist(),
+                    _dist_opts,
+                    format_func=lambda x: "— 선택하세요 —" if x is None else x,
                     key="district_select",
                     help="선택 시 지도 아래 지표 표시",
                 )
@@ -889,10 +891,8 @@ with tab_map:
                 if _cur_dist_sel and not st.session_state.pop("_skip_dist_sync", False):
                     st.session_state["ctx_district"] = _cur_dist_sel
 
-                # ── 지도 아래 1×4 가로 게이지 ──────────────────────────────
-                _sel_dist_g = st.session_state.get("district_select") or (
-                    _dist_df.iloc[0]["district"] if not _dist_df.empty else None
-                )
+                # ── 지도 아래 1×4 가로 게이지 (명시적 선택 시만 표시) ──────
+                _sel_dist_g = st.session_state.get("district_select")
                 if _sel_dist_g and _sel_dist_g in _dist_df["district"].values:
                     _dr_g = _dist_df[_dist_df["district"] == _sel_dist_g].iloc[0]
 
@@ -1080,9 +1080,7 @@ with tab_map:
                         unsafe_allow_html=True,
                     )
 
-                _sel_dist = st.session_state.get("district_select") or (
-                    _dist_df.iloc[0]["district"] if not _dist_df.empty else None
-                )
+                _sel_dist = st.session_state.get("district_select")
                 if _sel_dist and _sel_dist in _dist_df["district"].values:
                     _dr = _dist_df[_dist_df["district"] == _sel_dist].iloc[0]
                     st.divider()
