@@ -6,8 +6,6 @@
 
 ## 👉 [라이브 데모](https://procurement-logistics-ai-5qian47widxpcuqefpjipy.streamlit.app)
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://procurement-logistics-ai-5qian47widxpcuqefpjipy.streamlit.app)
-
 ## 🧭 라이브 데모 보는 방법
 
 처음 보는 분들은 아래 순서로 확인하면 서비스 흐름을 쉽게 이해할 수 있습니다.
