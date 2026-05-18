@@ -1646,6 +1646,24 @@ with tab_region:
             fit_sub = consumer_fit[_fit_mask][["item_category", "consumer_fit_score"]]
             result = result.merge(fit_sub, on="item_category", how="left")
 
+        # ── 품목군 필터 (ctx_cat 연동) ────────────────────────────────────────
+        _item_cats_r = ["전체"] + sorted(result["item_category"].dropna().unique().tolist())
+        _ctx_cat_r = st.session_state.get("ctx_cat")
+        if (
+            _ctx_cat_r
+            and _ctx_cat_r in _item_cats_r
+            and st.session_state.get("_region_last_cat_ctx") != _ctx_cat_r
+        ):
+            st.session_state["_region_last_cat_ctx"] = _ctx_cat_r
+            st.session_state["region_tab_cat"] = _ctx_cat_r
+        _default_cat_idx = (
+            _item_cats_r.index(st.session_state["region_tab_cat"])
+            if st.session_state.get("region_tab_cat") in _item_cats_r else 0
+        )
+        sel_cat_r = st.selectbox(
+            "품목군 필터", _item_cats_r, index=_default_cat_idx, key="region_tab_cat",
+        )
+
         col1, col2 = st.columns([2, 1])
         with col1:
             st.subheader(f"{selected} 품목별 공공수요 점수")
@@ -1659,11 +1677,16 @@ with tab_region:
                     _r_sorted["consumer_fit_score"].apply(lambda v: f"적합도 {v:.2f}" if pd.notna(v) else "")
                     if "consumer_fit_score" in _r_sorted.columns else [""] * len(_r_sorted)
                 )
+                # 선택 품목군 강조: 비선택 항목 반투명
+                _opacity = _r_sorted["item_category"].apply(
+                    lambda x: 1.0 if sel_cat_r == "전체" or x == sel_cat_r else 0.25
+                ).tolist()
                 fig_reg = go.Figure(go.Bar(
                     x=_r_sorted["opportunity_score"],
                     y=_r_sorted["item_category"],
                     orientation="h",
                     marker_color=_r_sorted["_color"].tolist(),
+                    marker_opacity=_opacity,
                     text=_r_sorted["bid_count"].apply(lambda v: f"{int(v)}건"),
                     textposition="outside",
                     hovertemplate="<b>%{y}</b><br>기회점수: %{x:.2f}<br>공고수: %{text}<extra></extra>",
@@ -1761,9 +1784,37 @@ with tab_region:
                 st.dataframe(display, use_container_width=True, hide_index=True)
 
         with col2:
-            st.subheader("해석 기준")
-            st.markdown(
-                f"""
+            if sel_cat_r != "전체":
+                # 선택 품목군 상세
+                _sel_row = result[result["item_category"] == sel_cat_r]
+                if not _sel_row.empty:
+                    _sr = _sel_row.iloc[0]
+                    _flag = _sr.get("recommendation_flag", "")
+                    _flag_color_map = {"추천": COLOR_GOOD, "제외": COLOR_BAD, "데이터부족": COLOR_WARN}
+                    _fc = _flag_color_map.get(_flag, "#78716C")
+                    st.subheader(sel_cat_r)
+                    st.markdown(
+                        f'<span style="background:{_fc}20;color:{_fc};padding:3px 12px;'
+                        f'border-radius:10px;font-size:13px;font-weight:700;">{_flag}</span>',
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown("")
+                    mc1, mc2 = st.columns(2)
+                    mc1.metric("기회점수", f"{_sr.get('opportunity_score', 0):.1f}점")
+                    mc2.metric("공고 건수", f"{int(_sr.get('bid_count', 0))}건")
+                    if "consumer_fit_score" in _sr and pd.notna(_sr.get("consumer_fit_score")):
+                        st.metric("소비층 적합도", f"{_sr['consumer_fit_score']:.2f}")
+                    if "bids_per_10k_population" in _sr and pd.notna(_sr.get("bids_per_10k_population")):
+                        st.metric("인구 1만명당 공고", f"{_sr['bids_per_10k_population']:.1f}건")
+                    if "amount_sum" in _sr and pd.notna(_sr.get("amount_sum")):
+                        st.metric("총 발주금액", format_won(_sr["amount_sum"]))
+                else:
+                    st.info(f"{selected}에 {sel_cat_r} 데이터가 없습니다.")
+                show_score_formula()
+            else:
+                st.subheader("해석 기준")
+                st.markdown(
+                    f"""
 **{selected}** 자치구의 공공조달 수요 분포입니다.
 
 - **opportunity_score**: 공고수(50%) + 금액(30%) + 최근성(20%) 종합 점수
@@ -1771,9 +1822,9 @@ with tab_region:
 - **bids_per_10k_population**: 인구 1만명 당 공고 수
 
 > 공고 수가 적어도 금액이 크거나 최근 발주라면 점수가 높을 수 있습니다.
-                """
-            )
-            show_score_formula()
+                    """
+                )
+                show_score_formula()
 
         st.subheader("TOP 3 품목군 요약")
         rec_result = result[result.get("recommendation_flag", pd.Series("추천", index=result.index)) == "추천"] if "recommendation_flag" in result.columns else result
