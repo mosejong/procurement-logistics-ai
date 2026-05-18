@@ -891,15 +891,18 @@ with tab_map:
                 if _cur_dist_sel and not st.session_state.pop("_skip_dist_sync", False):
                     st.session_state["ctx_district"] = _cur_dist_sel
 
-                # ── 지도 아래 1×4 가로 게이지 (명시적 선택 시만 표시) ──────
+                # ── 지도 아래 1×4 가로 게이지 ──────────────────────────────
+                # 시군구 미선택 → 시도 합계, 선택 시 → 해당 시군구 데이터
                 _sel_dist_g = st.session_state.get("district_select")
+
+                def _safe_g(val, mul=1.0, cap=100.0):
+                    v = val if not pd.isna(val) else 0.0
+                    return min(float(v) * mul, cap)
+
+                _city_row_g = _map_df[_map_df["city"] == _drilldown_city] if not _map_df.empty else pd.DataFrame()
                 if _sel_dist_g and _sel_dist_g in _dist_df["district"].values:
+                    # 시군구 선택 상태
                     _dr_g = _dist_df[_dist_df["district"] == _sel_dist_g].iloc[0]
-
-                    def _safe_g(val, mul=1.0, cap=100.0):
-                        v = val if not pd.isna(val) else 0.0
-                        return min(float(v) * mul, cap)
-
                     _opp_raw_g = _dr_g.get("opportunity_score") or 0
                     _opp100_g = _safe_g(_opp_raw_g, 100.0 / max(_dist_df["opportunity_score"].max(), 1))
                     _metrics_g = [("기회점수", _opp100_g, COLOR_PRIMARY, False)]
@@ -908,9 +911,28 @@ with tab_map:
                     if "competition_score" in _dist_df.columns:
                         _metrics_g.append(("경쟁도", _safe_g(_dr_g.get("competition_score"), 100.0), COLOR_BAD, True))
                     _metrics_g.append(("물류 점수", _safe_g(_dr_g.get("hub_score")), COLOR_GOOD, False))
+                    _gauge_label = f"{_sel_dist_g} 상세 지표"
+                elif not _city_row_g.empty:
+                    # 미선택 → 시도 합계
+                    _cr_g = _city_row_g.iloc[0]
+                    _opp100_g = _safe_g(_cr_g.get("opp_score_100") or _cr_g.get("opportunity_score") or 0)
+                    _metrics_g = [("기회점수", _opp100_g, COLOR_PRIMARY, False)]
+                    if "consumer_fit_100" in _cr_g or "consumer_fit_score" in _cr_g:
+                        _cf = _cr_g.get("consumer_fit_100") or _safe_g(_cr_g.get("consumer_fit_score"), 100.0)
+                        _metrics_g.append(("소비층 적합도", _cf, COLOR_PURPLE, False))
+                    if "competition_100" in _cr_g or "competition_score" in _cr_g:
+                        _cp = _cr_g.get("competition_100") or _safe_g(_cr_g.get("competition_score"), 100.0)
+                        _metrics_g.append(("경쟁도", _cp, COLOR_BAD, True))
+                    _metrics_g.append(("물류 점수", _safe_g(_cr_g.get("hub_score")), COLOR_GOOD, False))
+                    _gauge_label = f"{_drilldown_city} 합계 지표"
+                else:
+                    _metrics_g = None
+                    _gauge_label = ""
+
+                if _metrics_g:
                     st.markdown(
                         f'<p style="font-size:12px;font-weight:600;color:#475569;margin:4px 0 0 0;">'
-                        f'{_sel_dist_g} 상세 지표</p>',
+                        f'{_gauge_label}</p>',
                         unsafe_allow_html=True,
                     )
                     st.plotly_chart(_make_row_gauges(_metrics_g), use_container_width=True, key="gauge_row")
