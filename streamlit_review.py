@@ -884,9 +884,9 @@ with tab_map:
                     key="district_select",
                     help="선택 시 지도 아래 지표 표시",
                 )
-                # 선택된 구를 ctx_district에 동기화 → 다른 탭에서 자동 적용
+                # 선택된 구를 ctx_district에 동기화 (탭 이동 중엔 덮어쓰기 스킵)
                 _cur_dist_sel = st.session_state.get("district_select")
-                if _cur_dist_sel:
+                if _cur_dist_sel and not st.session_state.pop("_skip_dist_sync", False):
                     st.session_state["ctx_district"] = _cur_dist_sel
 
                 # ── 지도 아래 1×4 가로 게이지 ──────────────────────────────
@@ -1100,9 +1100,9 @@ with tab_map:
                     if st.button("지역 분석 탭에서 보기", use_container_width=True):
                         st.session_state["ctx_city"] = _drilldown_city
                         st.session_state["ctx_district"] = _sel_dist
-                        st.session_state["district_select"] = _sel_dist  # rerun 시 덮어쓰기 방지
                         st.session_state["ctx_cat"] = selected_cat
                         st.session_state["_nav_tab_idx"] = 2
+                        st.session_state["_skip_dist_sync"] = True  # col_map_area 덮어쓰기 방지
                         st.rerun()
 
     # ── 전체 너비 탭 이동 버튼 ────────────────────────────────────────────────
