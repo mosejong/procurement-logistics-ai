@@ -1522,7 +1522,7 @@ Gemini AI (gemini-3.1-flash-lite) — 판정 4종
 - 소비층 적합도는 시/도별 연령 분포 기반 추정값 (실측 시군구 연령 데이터 미확보)
 - 기타/미분류 약 9% 잔존 (키워드 규칙 + ML 이후에도 매칭 불가 공고)
 - opportunity_score는 공공수요 참고 지표이며 창업 성공 예측값이 아닙니다
-- AI 판정은 정량 수치 기반 해석이며 투자·창업 판단 근거가 아닙니다
+- AI 해석은 정량 수치 기반 설명이며 투자·창업 판단 근거가 아닙니다
         """
     )
 
@@ -1661,13 +1661,13 @@ with tab_region:
                     else:
                         st.info(
                             f"**일부 품목 {_n_low}개가 데이터부족(공고 10건 미만)입니다.** "
-                            "수요 없음 vs 블루오션 — AI 판정으로 확인하세요."
+                            "수요 없음 vs 블루오션 — AI 수요 공백 해석으로 확인하세요."
                         )
 
                     # AI 판정 — 버튼 클릭 시 표시 (토글 대신)
                     _ai_shortage_key = f"shortage_verdict_{selected}"
                     if _ai_shortage_key not in st.session_state.get("gemini_cache", {}):
-                        if st.button("🤖 AI 판정 실행 — 블루오션 vs 저수요", key=f"btn_{_ai_shortage_key}"):
+                        if st.button("🤖 AI 수요 공백 해석", key=f"btn_{_ai_shortage_key}"):
                             with st.spinner("인근 지역 데이터와 비교 분석 중..."):
                                 from src.recommendation.gemini_client import build_shortage_verdict, ShortageContext
                                 _same_city = features_all[
@@ -1740,10 +1740,10 @@ with tab_region:
             st.info(
                 f"**수요 집중 품목 감지: {_hot_label}**  \n"
                 "공고 건수가 많은 품목은 수요가 확실하지만 기존 납품사와의 경쟁이 치열할 수 있습니다. "
-                "레드오션인지 아직 진입 여지가 있는지 AI가 판정합니다."
+                "레드오션인지 아직 진입 여지가 있는지 AI가 해석합니다."
             )
             if _overdemand_key not in st.session_state.get("gemini_cache", {}):
-                if st.button("🤖 AI 판정 실행 — 레드오션 vs 진입 여지", key=f"btn_{_overdemand_key}"):
+                if st.button("🤖 AI 경쟁 구조 해석", key=f"btn_{_overdemand_key}"):
                     with st.spinner("경쟁 구조 분석 중..."):
                         from src.recommendation.gemini_client import build_overdemand_verdict, OverdemandContext
                         _same_city_all = features_all[

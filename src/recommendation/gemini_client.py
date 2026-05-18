@@ -176,7 +176,7 @@ class ShortageContext:
 
 
 _SHORTAGE_SYSTEM = """당신은 공공조달 입찰공고 데이터 패턴을 분석하는 전문 분석가입니다.
-수치를 비교해 블루오션(숨은 수요)인지 실제 저수요인지 판정합니다.
+수치를 비교해 블루오션(숨은 수요)인지 실제 저수요인지 해석합니다.
 
 반드시 지켜야 할 규칙:
 - 판정 결과를 첫 문장에 명확히 제시 (블루오션 가능성 높음 / 저수요 가능성 높음 / 판단 어려움)
@@ -268,33 +268,33 @@ class OverdemandContext:
 
 
 _OVERDEMAND_SYSTEM = """당신은 공공조달 시장 경쟁 구조를 분석하는 전문 분석가입니다.
-수요가 높은 품목의 진입 가능성을 3단계로 판정합니다.
+수요가 높은 품목의 진입 조건을 3단계로 해석합니다.
 
 반드시 지켜야 할 규칙:
-- 첫 줄에 반드시 다음 셋 중 하나로 판정: 🔴 진입 비추천 / 🟡 조건부 진입 / 🟢 진입 추천
+- 첫 줄에 반드시 다음 셋 중 하나로 시작: 🔴 진입 주의 / 🟡 조건부 검토 / 🟢 진입 검토
 - competition_score(개방경쟁 비율)와 bid_count를 반드시 수치로 인용
-- 진입 비추천 시: 구체적인 이유(기존 지명업체 고착, 대형 납품사 독점 등)를 명시
-- 조건부/추천 시: 틈새 전략 또는 차별화 포인트 제시
-- 창업 성공 보장 표현 금지 (데이터 기반 판단임을 명시)
+- 진입 주의 시: 구체적인 이유(기존 지명업체 고착, 대형 납품사 독점 등)를 명시
+- 조건부·검토 시: 틈새 전략 또는 차별화 포인트 제시
+- 창업 성공 보장 표현 금지 (데이터 기반 해석임을 명시)
 - 4~6문장, 한국어"""
 
-_OVERDEMAND_TEMPLATE = """{city} {district}({district_profile}) 고수요 품목 경쟁 구조 분석
+_OVERDEMAND_TEMPLATE = """{city} {district}({district_profile}) 고수요 품목 경쟁 구조 해석
 
 현황:
 - 같은 {city} 내 지역 평균 공고 수: {city_avg:.0f}건
 - 이 지역 고수요 품목 데이터:
 {items_lines}
 
-판정 기준 참고:
+해석 기준 참고:
 - competition_score < 0.4 → 기존 지명업체 위주, 신규 진입 어려움
 - competition_score 0.4~0.7 → 부분 개방, 틈새 진입 가능
 - competition_score > 0.7 → 개방경쟁, 신규 진입 여지 있음
 - bid_count가 시/도 평균 대비 5배 이상 → 수요 집중 = 경쟁도 높음 가능성
 
-위 데이터를 분석해:
-1. 🔴/🟡/🟢 3단계 진입 권고를 명확히 내리세요.
-2. 진입 비추천이라면 왜 어려운지 구체적 근거를 대세요.
-3. 조건부/추천이라면 어떤 방식으로 접근해야 하는지 실질적 전략을 제시하세요."""
+위 데이터를 해석해:
+1. 🔴/🟡/🟢 3단계 진입 조건을 명확히 제시하세요.
+2. 진입 주의라면 왜 어려운지 구체적 근거를 대세요.
+3. 조건부·검토라면 어떤 방식으로 접근해야 하는지 실질적 전략을 제시하세요."""
 
 
 def build_overdemand_verdict(ctx: OverdemandContext) -> str:
@@ -357,12 +357,12 @@ def _overdemand_fallback(ctx: OverdemandContext, error: str = "") -> str:
     lines = [f"**{ctx.district} 고수요 품목 간이 진단**"]
     for h in ctx.hot_items:
         comp = h["competition_score"]
-        verdict = "진입 여지 있음" if comp >= 0.7 else ("레드오션 가능성" if comp < 0.4 else "혼재")
+        verdict = "🟢 진입 검토" if comp >= 0.7 else ("🔴 진입 주의" if comp < 0.4 else "🟡 조건부 검토")
         lines.append(
             f"- **{h['item']}**: 공고 {h['bid_count']}건, 개방경쟁 {comp*100:.0f}% → {verdict}"
         )
     if error:
-        lines.append(f"_(AI 판정 실패: {error[:60]})_")
+        lines.append(f"_(AI 해석 실패: {error[:60]})_")
     return "\n".join(lines)
 
 
@@ -477,7 +477,7 @@ def _shortage_fallback(ctx: ShortageContext, error: str = "") -> str:
             f"(평균 {c['avg_count']:.0f}건)"
         )
     if error:
-        lines.append(f"_(AI 판정 실패: {error[:60]})_")
+        lines.append(f"_(AI 해석 실패: {error[:60]})_")
     return "\n".join(lines)
 
 

@@ -35,10 +35,10 @@ KOSIS 신생기업 생존율 API
   → build_map_summary.py
       adjusted_score = opportunity_score × (survival_5y/100) × (1 - dissolution_rate)
 
-Gemini API (gemini_client.py) — AI 판정 5종
+Gemini API (gemini_client.py) — AI 해석 5종 (정량 지표를 사람이 이해하기 쉬운 설명으로 변환)
   ① 수요 설명: 추천 품목 공공수요 해석 문장
-  ② 수요 공백: 데이터부족 → 블루오션 vs 실제 저수요
-  ③ 경쟁 구조: 고수요 지역 → 🔴진입 비추천 / 🟡조건부 / 🟢진입 추천
+  ② 수요 공백: 데이터부족 → 블루오션 vs 실제 저수요 해석
+  ③ 경쟁 구조: 고수요 지역 → 🔴진입 주의 / 🟡조건부 검토 / 🟢진입 검토
   ④ 물류 거점: 전국 수요 분포 기반 1·2·3티어 거점 전략
   ⑤ 지역 비교: 두 지역 품목군 수요 포트폴리오 차이 설명
 
@@ -55,7 +55,7 @@ Streamlit 대시보드 (streamlit_review.py) — 10개 탭
 | 요건 | 구현 |
 |---|---|
 | 공공데이터 API 활용 | ✅ 조달청(필수) + 행안부 인구 + 소상공인 상권정보 + KOSIS 생존율 — 4개 기관 실결합 |
-| AI 활용 | ✅ Gemini 판정 5종 (수요설명·공백판정·경쟁구조·물류거점·지역비교) + ML 분류기 |
+| AI 활용 | ✅ Gemini 해석 5종 (수요설명·수요공백·경쟁구조·물류거점·지역비교) + ML 분류기 |
 | 수집 범위 | ✅ 전국 17개 시/도, 220개 지역, 100,083건, 최근 2년 |
 | 창업 지원 활용성 | ✅ 예비창업자 / 납품업체 / 물류사·3PL 3개 타겟 |
 | 재현 가능성 | ✅ 파이프라인 전 단계 CLI 실행 가능 |
@@ -141,7 +141,7 @@ src/
   preprocess/     정제 + 기관/공고명 분류기 (키워드 규칙 + ML fallback)
   modeling/       ML 분류기 훈련·추론 (item_classifier.pkl)
   features/       기회 매트릭스·소비층 적합도·경쟁 포화도·인구 보정
-  recommendation/ 추천 정책 + Gemini AI 판정 (5종)
+  recommendation/ 추천 정책 + Gemini AI 해석 (5종)
 models/
   item_classifier.pkl    공고명 분류 ML 모델
 outputs/tables/
@@ -181,4 +181,4 @@ check.md                검수 기록 (13차)
 ---
 
 > `opportunity_score`는 공공수요 참고 지표이며, 창업 성공 예측값이 아닙니다.  
-> AI 판정은 정량화 수치를 기반으로 한 데이터 해석이며, 투자·창업 판단 근거가 아닙니다.
+> AI 해석은 정량화 수치를 사람이 이해하기 쉬운 설명으로 변환한 보조 자료이며, 투자·창업 판단 근거가 아닙니다.
