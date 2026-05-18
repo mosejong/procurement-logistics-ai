@@ -437,8 +437,9 @@ with tab_map:
         if _k not in st.session_state:
             st.session_state[_k] = _v
 
-    # ── 3열: 필터(2) | 지도(6) | 패널(3) ────────────────────────────────────
-    col_filter, col_map_area, col_panel = st.columns([2, 6, 3])
+    # ── 2열: 필터(2) | 지도(8) + 하단 패널 ──────────────────────────────────
+    col_filter, col_map_area = st.columns([2, 8])
+    col_panel = st.container()  # 지도 아래 전체 너비로 렌더링
 
     with col_filter:
         st.markdown("**주제 선택**")
