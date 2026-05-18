@@ -18,7 +18,7 @@ import pandas as pd
 
 from src.config.regions import REGIONS, normalize_city_name
 
-DEFAULT_CSV = Path("202305_202604_주민등록인구및세대현황_월간.csv")
+DEFAULT_CSV = Path("data/raw/202305_202604_주민등록인구및세대현황_월간.csv")
 OUT_PATH = Path("data/reference/national_district_population.csv")
 
 # 최신 연월 (컬럼명 접두어)
