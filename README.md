@@ -25,12 +25,15 @@
 
 ## 데이터 출처
 
-| 데이터 | 출처 | 활용 목적 |
-|---|---|---|
-| 입찰공고 데이터 | 조달청 나라장터 API | 지역·품목별 공공수요 파악 (100,083건) |
-| 인구 데이터 | 행정안전부 | 지역 규모 보정 및 소비층 적합도 분석 |
-| 상권정보 | 소상공인시장진흥공단 | 업종별 경쟁 포화도 분석 |
-| 생존율 데이터 | KOSIS (통계청) | 업종별 진입 리스크 참고 지표 |
+| 데이터 | 출처 | API URL | 활용 목적 |
+|---|---|---|---|
+| 입찰공고 데이터 | 조달청 나라장터 | `apis.data.go.kr/1230000/ad/BidPublicInfoService` | 지역·품목별 공공수요 파악 (100,083건) |
+| 낙찰결과 데이터 | 조달청 나라장터 | `apis.data.go.kr/1230000/ad/BidPublicInfoService` | 낙찰 현황 참고 지표 |
+| 주민등록 인구 현황 | 행정안전부 | `apis.data.go.kr/1741000/rdnmAdrBassInfoSvc` | 지역 규모 보정 |
+| 연령별 인구 통계 | 행정안전부 | `apis.data.go.kr/1741000/admmSexdAgePpltn/selectAdmmSexdAgePpltn` | 소비층 적합도 분석 |
+| 주민등록 세대 현황 | 행정안전부 | `apis.data.go.kr/1741000/세대현황` | 세대 기반 수요 보정 |
+| 상권정보 | 소상공인시장진흥공단 | `apis.data.go.kr/B553077/api/open/sdsc2` | 업종별 경쟁 포화도 분석 |
+| 신생기업 생존율 | KOSIS (통계청) | `kosis.kr/openapi/statisticsData.do` | 업종별 진입 리스크 참고 지표 |
 
 ---
 
