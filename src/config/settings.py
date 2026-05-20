@@ -30,6 +30,7 @@ KOSIS_API_KEY = _get_secret("KOSIS_API_KEY")
 NEIS_API_KEY = _get_secret("NEIS_API_KEY")  # https://open.neis.go.kr 에서 발급
 
 BASE_URL_BID = "https://apis.data.go.kr/1230000/ad/BidPublicInfoService"
+BASE_URL_CONTRACT = "https://apis.data.go.kr/1230000/ao/CntrctInfoService"
 BASE_URL_POPULATION = os.getenv(
     "BASE_URL_POPULATION",
     "https://apis.data.go.kr/1741000/stdgPpltnHhStus/selectStdgPpltnHhStus",
