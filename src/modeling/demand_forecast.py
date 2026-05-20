@@ -41,7 +41,7 @@ def load_monthly(item_category: str | None = None) -> pd.DataFrame:
     return monthly
 
 
-def forecast_category(monthly: pd.DataFrame, category: str, months_ahead: int = 3) -> pd.DataFrame:
+def forecast_category(monthly: pd.DataFrame, category: str, months_ahead: int = 6) -> pd.DataFrame:
     """
     단일 카테고리 월별 건수에 선형 추세를 피팅하고 미래 예측합니다.
     """
@@ -90,10 +90,15 @@ def forecast_category(monthly: pd.DataFrame, category: str, months_ahead: int = 
     result["trend"] = "증가" if slope > 0.5 else ("감소" if slope < -0.5 else "유지")
     result["slope_per_month"] = round(slope, 2)
 
+    # 계절성 감지: 잔차 변동계수(CV)가 크면 계절성 있음
+    cv = float(cat["residual"].std() / (cat["bid_count"].mean() + 1e-9))
+    result["seasonal_cv"] = round(cv, 3)
+    result["has_seasonality"] = cv > 0.5  # 변동계수 50% 초과 = 계절성 강함
+
     return result
 
 
-def run(categories: list[str] | None = None, months_ahead: int = 3) -> None:
+def run(categories: list[str] | None = None, months_ahead: int = 6) -> None:
     print("[demand_forecast] 월별 수요 예측 시작...")
     monthly = load_monthly()
 

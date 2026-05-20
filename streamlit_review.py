@@ -84,6 +84,20 @@ TOP_N_MAP       = 20   # 지도 드릴다운 / 경쟁분석 상위 표시 수
 RAW_PREVIEW     = 500  # 원천 데이터 미리보기 최대 행수
 TREND_START_YM  = "2024-04"  # 월별 추이 표시 시작 연월
 
+# ── 컬럼 한글 레이블 ─────────────────────────────────────────────────────────
+_COL_KR: dict[str, str] = {
+    "city": "시/도", "district": "시/군/구", "district_profile": "지역 특성",
+    "bid_title": "공고명", "agency_name": "발주기관",
+    "item_category": "품목군", "item_category_detail": "세부 품목",
+    "bid_count": "공고 수", "amount_sum": "총 발주 금액",
+    "estimated_amount": "추정가격", "posted_date": "공고일",
+    "opportunity_score": "기회 점수", "competition_score": "경쟁 개방도",
+    "consumer_fit_score": "소비층 적합도", "recommendation_flag": "추천 여부",
+    "bids_per_10k_population": "인구 1만명당 공고",
+    "trend": "트렌드", "slope_per_month": "월평균 변화 (건)",
+    "agency_type": "기관 유형",
+}
+
 # ── 색상 상수 ────────────────────────────────────────────────────────────────
 COLOR_GOOD    = "#16A34A"   # 추천 / 긍정 (초록)
 COLOR_WARN    = "#F59E0B"   # 주의 / 데이터부족 (주황)
@@ -373,14 +387,14 @@ st.markdown(
 _TAB_LABELS = [
     "🌏 전국 지도", "🔍 사업 유형 검색", "🗺️ 지역 분석",
     "📦 품목 분석", "⚖️ 자치구 비교", "👥 소비층 적합도",
-    "🏪 경쟁 분석", "🚚 물류 거점 분석", "🔬 분석 근거 데이터", "📋 프로젝트 개요",
-    "🔭 수요 예측",
+    "🏪 경쟁 분석", "🔭 수요 예측",
+    "🚚 물류 거점 분석", "🔬 분석 근거 데이터", "📋 프로젝트 개요",
 ]
 (
     tab_map, tab_search, tab_region,
     tab_item, tab_compare, tab_consumer,
-    tab_competition, tab_logistics, tab_raw, tab_overview,
-    tab_forecast,
+    tab_competition, tab_forecast,
+    tab_logistics, tab_raw, tab_overview,
 ) = st.tabs(_TAB_LABELS)
 
 # ── JS 탭 전환 (버튼 클릭 후 다음 rerun에서 실행) ─────────────────────────────
@@ -1350,7 +1364,7 @@ with tab_search:
                             st.dataframe(
                                 cat_data[["district", "bid_count", "opportunity_score"]].sort_values(
                                     "opportunity_score", ascending=False
-                                ).head(5),
+                                ).head(5).rename(columns=_COL_KR),
                                 use_container_width=True,
                                 hide_index=True,
                             )
@@ -1389,12 +1403,12 @@ with tab_search:
                                     "district", "district_profile", "bid_count",
                                     "opportunity_score", "bids_per_10k_population",
                                 ] if c in cat_data.columns]
-                                st.dataframe(cat_data[show_cols], use_container_width=True, hide_index=True)
+                                st.dataframe(cat_data[show_cols].rename(columns=_COL_KR), use_container_width=True, hide_index=True)
                             with col2:
                                 top = cat_data.iloc[0]
                                 st.metric("수요 1위 지역", top["district"])
                                 st.metric("공고 수", f"{int(top['bid_count'])}건")
-                                st.metric("opportunity_score", f"{top['opportunity_score']:.1f}")
+                                st.metric("기회 점수", f"{top['opportunity_score']:.1f}")
 
                             # 점수 구성 요소 비교표
                             with st.expander("📊 자치구별 점수 구성 상세 보기"):
@@ -1751,7 +1765,7 @@ with tab_region:
                     _disp["recommendation_flag"] = _disp["recommendation_flag"].map({
                         "추천": "✅ 추천", "제외": "🚫 제외", "데이터부족": "⚠️ 데이터부족",
                     }).fillna(_disp["recommendation_flag"])
-                    st.dataframe(_disp, use_container_width=True, hide_index=True)
+                    st.dataframe(_disp.rename(columns=_COL_KR), use_container_width=True, hide_index=True)
 
                 # 데이터부족 비율에 따라 contextual 안내
                 _n_low = (result["recommendation_flag"] == "데이터부족").sum()
@@ -1857,17 +1871,32 @@ with tab_region:
                 )
                 show_score_formula()
 
-        st.subheader("TOP 3 품목군 요약")
         rec_result = result[result.get("recommendation_flag", pd.Series("추천", index=result.index)) == "추천"] if "recommendation_flag" in result.columns else result
         top3 = rec_result.head(3)
-        cols = st.columns(3)
-        for i, (col, row) in enumerate(zip(cols, top3.itertuples())):
-            with col:
-                st.metric(
-                    label=f"{i+1}위 {row.item_category}",
-                    value=f"{row.opportunity_score:.1f}점",
-                    delta=f"공고 {int(row.bid_count)}건",
+
+        # TOP 3 / 하위 3 해석 블록
+        _all_rec = rec_result.copy()
+        _bottom3 = _all_rec[_all_rec["bid_count"] >= 5].tail(3) if len(_all_rec) >= 6 else pd.DataFrame()
+
+        _col_top, _col_bot = st.columns(2)
+        with _col_top:
+            st.markdown("**기회 상위 품목**")
+            for i, row in enumerate(top3.itertuples(), 1):
+                _comp = getattr(row, "competition_score", 1.0)
+                _comp_label = "개방" if _comp >= 0.7 else ("혼합" if _comp >= 0.4 else "제한")
+                st.markdown(
+                    f"{i}. **{row.item_category}** — {row.opportunity_score:.1f}점 · "
+                    f"공고 {int(row.bid_count)}건 · 경쟁 {_comp_label}({_comp:.0%})"
                 )
+        with _col_bot:
+            if not _bottom3.empty:
+                st.markdown("**수요 낮은 품목 (최소 5건)**")
+                for i, row in enumerate(reversed(list(_bottom3.itertuples())), 1):
+                    _comp = getattr(row, "competition_score", 1.0)
+                    st.markdown(
+                        f"{i}. **{row.item_category}** — {row.opportunity_score:.1f}점 · "
+                        f"공고 {int(row.bid_count)}건"
+                    )
 
         # 과수요 판정 — 상위 추천 품목 중 공고 수가 높은 항목 경쟁 구조 분석
         _hot_rec = rec_result[rec_result["bid_count"] >= 20] if not rec_result.empty else pd.DataFrame()
@@ -2064,7 +2093,7 @@ with tab_item:
             display = result[show_cols].copy()
             if "amount_sum" in display.columns:
                 display["amount_sum"] = display["amount_sum"].apply(format_won)
-            st.dataframe(display, use_container_width=True, hide_index=True)
+            st.dataframe(display.rename(columns=_COL_KR), use_container_width=True, hide_index=True)
 
         with col2:
             st.subheader("해석")
@@ -2076,7 +2105,7 @@ with tab_item:
 
 상위 지역: **{top_dist['district']}**
 - 공고 수: {int(top_dist['bid_count'])}건
-- opportunity_score: {top_dist['opportunity_score']:.1f}점
+- 기회 점수: {top_dist['opportunity_score']:.1f}점
 
 > 이 품목으로 창업 또는 B2G(공공납품) 진입 시,
 > 위 지역의 공공기관 수요가 상대적으로 높습니다.
@@ -2413,7 +2442,7 @@ with tab_consumer:
                     st.plotly_chart(fig_sc, use_container_width=True)
                     st.caption("우상단 = 공공수요도 높고 소비층도 맞는 최우선 후보. 원 크기 = 공고 수.")
                 else:
-                    st.dataframe(combined, use_container_width=True, hide_index=True)
+                    st.dataframe(combined.rename(columns=_COL_KR), use_container_width=True, hide_index=True)
 
         with tab2:
             cats_fit = sorted(consumer_fit["item_category"].dropna().unique().tolist())
@@ -2980,7 +3009,7 @@ with tab_raw:
         if "estimated_amount" in display.columns:
             display["estimated_amount"] = display["estimated_amount"].apply(format_won)
         st.caption(f"최대 500건 표시 (전체 {_total_sel:,}건)")
-        st.dataframe(display, use_container_width=True, hide_index=True)
+        st.dataframe(display.rename(columns=_COL_KR), use_container_width=True, hide_index=True)
 
         # ── 다운로드 ──────────────────────────────────────────────────────────
         _dl_data = _raw_view[show_cols].copy()
@@ -3029,18 +3058,50 @@ with tab_forecast:
         if _f_city != "전체":
             _bo_match = _bo_match[_bo_match["city"] == _f_city]
 
-        if not _bo_match.empty:
-            top = _bo_match.sort_values("anomaly_score", ascending=False).iloc[0]
-            opp  = top["opportunity_score"]
-            comp = top["competition_score"]
-            label = "🟢 블루오션" if comp < 0.45 and opp > 20 else ("🔴 레드오션" if comp > 0.7 else "🟡 중간")
+        # 전국 공고수 분포 기준값 (레드오션 판정 기준)
+        _bid_q75 = float(matrix_all["bid_count"].quantile(0.75)) if not matrix_all.empty else 30
+
+        # blue_ocean 파일에 없으면 opportunity_matrix에서 직접 집계 (전국 상위 50 제한 우회)
+        _is_anomaly = not _bo_match.empty
+        _mx_match = None
+        if _is_anomaly:
+            _top_src = _bo_match.sort_values("anomaly_score", ascending=False).iloc[0]
+            opp       = float(_top_src["opportunity_score"])
+            comp      = float(_top_src["competition_score"])
+            _bid_cnt  = int(_top_src["bid_count"])
+            _rep_label = f"{_top_src['city']} {_top_src['district']} ({_bid_cnt}건)"
+            _anomaly_score = float(_top_src["anomaly_score"])
+            label = "🟢 블루오션"
+        else:
+            # fallback: matrix_all에서 해당 city+category 최상위 지역 조회
+            _mx_match = matrix_all[matrix_all["item_category"] == _f_cat]
+            if _f_city != "전체" and "city" in matrix_all.columns:
+                _mx_match = _mx_match[_mx_match["city"] == _f_city]
+            if not _mx_match.empty:
+                _mx_best   = _mx_match.sort_values("opportunity_score", ascending=False).iloc[0]
+                opp        = float(_mx_best["opportunity_score"])
+                comp       = float(_mx_best.get("competition_score", 1.0))
+                _bid_cnt   = int(_mx_best["bid_count"])
+                _city_label = CITY_LABELS.get(_f_city, _f_city) if _f_city != "전체" else "전국"
+                _rep_label = f"{_city_label} {_mx_best['district']} ({_bid_cnt}건) · 기회점수 최상위"
+                _anomaly_score = None
+                # 판정: 공고수 전국 상위 25% = 레드오션, 나머지 = 평범
+                label = "🔴 레드오션" if _bid_cnt >= _bid_q75 else "🟡 평범"
+
+        if _is_anomaly or (_mx_match is not None and not _mx_match.empty):
+            _label_desc = {
+                "🟢 블루오션": "수요 대비 경쟁이 낮은 진입 기회 지역",
+                "🔴 레드오션": "공고 수 전국 상위 25% — 기존 납품사 경쟁 치열",
+                "🟡 평범":    "보통 수준의 수요와 경쟁",
+            }
             col_c1, col_c2, col_c3 = st.columns(3)
             col_c1.metric("수요공백 판정", label)
             col_c2.metric("공공수요 점수", f"{opp:.1f}점")
-            col_c3.metric("경쟁도", f"{comp:.2f}")
-            st.caption(f"대표 지역: {top['city']} {top['district']} ({top['bid_count']}건)")
+            col_c3.metric("공고 수 (대표 지역)", f"{_bid_cnt}건")
+            st.caption(f"{_label_desc.get(label, '')} | 대표: {_rep_label}"
+                       + (f" · 이상탐지 {_anomaly_score:.3f}" if _anomaly_score else ""))
         else:
-            st.info(f"선택한 조건의 블루오션 탐지 결과가 없습니다. ({_f_city} / {_f_cat})")
+            st.info(f"해당 조건의 데이터가 없습니다. ({_f_city} / {_f_cat})")
 
         # ── 트렌드 + 3개월 예측 차트 ────────────────────────────────────────
         st.markdown("---")
@@ -3052,26 +3113,74 @@ with tab_forecast:
             trend_icon = {"증가": "📈", "감소": "📉", "유지": "➡️"}.get(trend, "")
             st.markdown(f"**{_f_cat} 트렌드: {trend_icon} {trend}** (월 {slope:+.1f}건)")
 
+            _seasonal = _fc_view["has_seasonality"].iloc[0] if "has_seasonality" in _fc_view.columns else False
+            _cv = _fc_view["seasonal_cv"].iloc[0] if "seasonal_cv" in _fc_view.columns else 0
+            if _seasonal:
+                st.warning(f"⚠️ 계절성 주의: 이 품목군은 월별 변동이 큽니다 (변동계수 {_cv:.2f}). "
+                           "1~2월 집중 발주 등 시기적 요인이 있을 수 있어 선형 예측의 신뢰도가 낮습니다.")
+
             _hist = _fc_view[~_fc_view["is_forecast"].astype(bool)].copy()
             _pred = _fc_view[_fc_view["is_forecast"].astype(bool)].copy()
 
             fig_fc = go.Figure()
+
+            # 배경: 예측 구간 음영
+            if not _pred.empty:
+                fig_fc.add_vrect(
+                    x0=_pred["ym_str"].iloc[0], x1=_pred["ym_str"].iloc[-1],
+                    fillcolor="rgba(220,38,38,0.06)", line_width=0,
+                    annotation_text="예측 구간", annotation_position="top left",
+                    annotation_font=dict(size=11, color="#DC2626"),
+                )
+
+            # 실제 공고 건수 (막대)
             fig_fc.add_trace(go.Bar(
                 x=_hist["ym_str"], y=_hist["bid_count"],
-                name="실제 공고 건수", marker_color="#4C72B0", opacity=0.7,
+                name="실제 공고 건수", marker_color="#4C72B0", opacity=0.75,
             ))
+
+            # 이동평균 추세선 (3개월 중심 이동평균 — 실제 흐름 반영)
+            _roll3 = (
+                _hist.set_index("ym_str")["bid_count"]
+                .rolling(window=3, center=True, min_periods=1)
+                .mean()
+                .round(1)
+                .reset_index()
+            )
             fig_fc.add_trace(go.Scatter(
-                x=_hist["ym_str"], y=_hist["fitted"],
-                name="추세선", line=dict(color="orange", dash="dot"),
+                x=_roll3["ym_str"], y=_roll3["bid_count"],
+                name="이동평균 (3개월)", line=dict(color="#F59E0B", width=2.5),
+                mode="lines",
             ))
+
+            # 이동평균 → 예측 연결 브릿지
+            if not _hist.empty and not _pred.empty:
+                _bridge_x = [_roll3["ym_str"].iloc[-1], _pred["ym_str"].iloc[0]]
+                _bridge_y = [_roll3["bid_count"].iloc[-1], _pred["fitted"].iloc[0]]
+                fig_fc.add_trace(go.Scatter(
+                    x=_bridge_x, y=_bridge_y,
+                    line=dict(color="#DC2626", width=1.5, dash="dot"),
+                    mode="lines", showlegend=False, hoverinfo="skip",
+                ))
+
+            # 예측 3개월 (값 레이블 포함)
             fig_fc.add_trace(go.Scatter(
                 x=_pred["ym_str"], y=_pred["fitted"],
-                name="예측 (3개월)", line=dict(color="red", dash="dash"),
-                mode="lines+markers", marker=dict(size=8, symbol="diamond"),
+                name="예측 (3개월)",
+                line=dict(color="#DC2626", width=2, dash="dash"),
+                mode="lines+markers+text",
+                marker=dict(size=10, symbol="diamond", color="#DC2626"),
+                text=_pred["fitted"].apply(lambda v: f"{v:.0f}건"),
+                textposition="top center",
+                textfont=dict(size=11, color="#DC2626"),
             ))
+
             fig_fc.update_layout(
                 xaxis_title="연월", yaxis_title="공고 건수",
-                legend=dict(orientation="h"), height=380,
+                legend=dict(orientation="h", y=-0.15),
+                height=400,
+                margin=dict(t=30, b=0),
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
             )
             st.plotly_chart(fig_fc, use_container_width=True)
 
@@ -3081,6 +3190,6 @@ with tab_forecast:
                     .first().reset_index()
                     .sort_values("slope_per_month", ascending=False)
                 )
-                st.dataframe(_summary, use_container_width=True, hide_index=True)
+                st.dataframe(_summary.rename(columns=_COL_KR), use_container_width=True, hide_index=True)
 
         st.warning("⚠️ 선형 추세 모델 한계: 계절성·외부 요인 미반영. 트렌드 방향 참고용이며 정밀 예측이 아닙니다.")

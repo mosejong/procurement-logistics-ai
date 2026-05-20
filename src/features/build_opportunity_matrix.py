@@ -16,7 +16,7 @@ opportunity_score 공식:
     - count_score    : 공고 수 (반복 수요 신호) — 전체 구 min-max 정규화
     - amount_score   : 총 발주 금액 (구매 규모) — 전체 구 min-max 정규화
     - recency_score  : 최근성 (1/(1+경과일/30)) — 현재 수요 여부
-    - competition_score : 개방경쟁 비율 (1 - 지명경쟁 비율) — 높을수록 신규진입 용이
+    - competition_score : 같은 품목군 내 공고수 역백분위 — 공고 적은 지역이 높음 (수요공백·신규진입 용이)
 """
 
 import pandas as pd
@@ -100,18 +100,11 @@ def build_opportunity_matrix(df: pd.DataFrame, target_districts: list[str] | Non
 
     has_lead = "lead_time_days" in filtered.columns
 
-    # 경쟁도: 지명경쟁(dsgntCmptYn=Y) 여부 플래그 준비
-    if "dsgntCmptYn" in filtered.columns:
-        filtered["_is_open"] = (filtered["dsgntCmptYn"].str.strip().str.upper() != "Y").astype(int)
-    else:
-        filtered["_is_open"] = 1  # 정보 없으면 개방경쟁으로 간주
-
     agg_dict = {
         "bid_count": ("bid_title", "size"),
         "amount_sum": ("estimated_amount", "sum"),
         "amount_mean": ("estimated_amount", "mean"),
         "latest_posted_date": ("posted_date", "max"),
-        "open_bid_ratio": ("_is_open", "mean"),  # 개방경쟁 비율 (0~1)
     }
     if has_lead:
         agg_dict["avg_lead_time_days"] = ("lead_time_days", "mean")
@@ -133,8 +126,13 @@ def build_opportunity_matrix(df: pd.DataFrame, target_districts: list[str] | Non
     matrix["count_score"] = min_max_score(matrix["bid_count"])
     matrix["amount_score"] = min_max_score(matrix["amount_sum"])
     matrix["recency_score"] = recency_score(matrix["latest_posted_date"])
-    # competition_score: 개방경쟁 비율 그대로 사용 (0~1, 높을수록 신규진입 용이)
-    matrix["competition_score"] = matrix["open_bid_ratio"].fillna(1.0).round(3)
+    # competition_score: 같은 품목군 내 공고수 역백분위
+    # 공고 수가 많은 지역 = 기존 납품사 활발 = 신규 진입 어려움 → 낮은 점수
+    # 공고 수가 적은 지역 = 수요공백 가능성 = 신규 진입 용이 → 높은 점수
+    matrix["competition_score"] = (
+        1.0 - matrix.groupby("item_category")["bid_count"]
+        .rank(pct=True, ascending=True)
+    ).clip(0, 1).round(3)
 
     matrix["opportunity_score"] = (
         (

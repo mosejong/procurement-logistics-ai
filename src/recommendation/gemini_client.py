@@ -40,16 +40,17 @@ _STATIC_MESSAGES = {
     ),
 }
 
-_SYSTEM_INSTRUCTION = """당신은 공공조달 입찰공고 데이터를 분석하는 중립적인 데이터 해석가입니다.
-예비창업자가 공공수요 신호를 이해할 수 있도록 데이터를 설명합니다.
+_SYSTEM_INSTRUCTION = """당신은 공공조달 입찰공고 데이터를 분석하는 냉정한 데이터 분석가입니다.
+상담가처럼 좋게만 말하지 않습니다. 수치가 나쁘면 나쁘다고 말합니다.
 
 반드시 지켜야 할 규칙:
-- 창업 성공을 예측하거나 보장하는 표현 금지
-- "유망합니다", "추천합니다", "좋은 기회입니다" 같은 판단형 표현 금지
-- "~건의 공고가 있었습니다", "~를 의미할 수 있습니다", "참고 지표로 활용하세요" 같은 설명형 표현 사용
-- 2~3문장, 한국어로 간결하게
-- 수치는 반드시 제공된 숫자를 그대로 인용 (절대 임의로 숫자 생성 금지)
-- 마지막 문장은 반드시 "이 수치는 공공조달 참고 지표이며 창업 성공을 보장하지 않습니다." 포함"""
+- 첫 줄에 반드시 다음 셋 중 하나로 시작: 📊 수요 있음 / ⚠️ 수요 미약 / 🔍 판단 어려움
+- 창업 성공을 예측하거나 보장하는 표현 절대 금지
+- "유망합니다", "좋은 기회입니다", "진입 검토해볼 만합니다" 같은 막연한 긍정 표현 금지
+- 수치가 낮으면 낮다고, 경쟁이 많으면 많다고 사실대로 기술
+- 수치는 반드시 제공된 숫자를 그대로 인용 (임의 생성 금지)
+- 2~3문장, 한국어
+- 마지막 문장: "이 수치는 공공조달 참고 지표이며 창업 성공을 보장하지 않습니다." 필수"""
 
 _USER_TEMPLATE = """다음은 {city} {district}의 공공조달 수요 데이터입니다.
 
@@ -121,7 +122,7 @@ def build_demand_summary(ctx: DemandContext) -> str:
         )
         if ctx.competition_score is not None:
             pct = ctx.competition_score * 100
-            competition_str = f"{pct:.0f}% (지명경쟁 제외 개방입찰 비율, 높을수록 신규진입 용이)"
+            competition_str = f"{pct:.0f}% (같은 품목군 내 공고수 역백분위, 높을수록 기존 납품사 적음 = 진입 용이)"
         else:
             competition_str = "데이터 없음"
 
@@ -277,34 +278,32 @@ class OverdemandContext:
     city_max_bid_count: float    # 같은 시/도 최대 공고 수
 
 
-_OVERDEMAND_SYSTEM = """당신은 공공조달 시장 경쟁 구조를 분석하는 전문 분석가입니다.
-수요가 높은 품목의 진입 조건을 3단계로 해석합니다.
+_OVERDEMAND_SYSTEM = """당신은 공공조달 시장 경쟁 구조를 분석하는 냉정한 분석가입니다.
+좋게 봐주지 않습니다. 수치가 불리하면 불리하다고 명시합니다.
 
 반드시 지켜야 할 규칙:
-- 첫 줄에 반드시 다음 셋 중 하나로 시작: 🔴 진입 주의 / 🟡 조건부 검토 / 🟢 진입 검토
-- competition_score(개방경쟁 비율)와 bid_count를 반드시 수치로 인용
-- 진입 주의 시: 구체적인 이유(기존 지명업체 고착, 대형 납품사 독점 등)를 명시
-- 조건부·검토 시: 틈새 전략 또는 차별화 포인트 제시
-- 창업 성공 보장 표현 금지 (데이터 기반 해석임을 명시)
+- 첫 줄에 반드시 다음 셋 중 하나로 시작: 🔴 진입 주의 / 🟡 조건부 검토 / 🟢 진입 여지 있음
+- 기본값은 🔴 진입 주의입니다. 🟢는 competition_score가 0.6 이상이고 bid_count가 시/도 평균의 2배 미만일 때만 가능합니다.
+- competition_score와 bid_count를 반드시 수치로 인용
+- 진입 주의: 기존 납품사 점유 / 규모 격차 / 장벽 등 구체 근거 명시
+- 조건부: 어떤 조건에서만 가능한지 한정적으로 기술
 - 4~6문장, 한국어"""
 
-_OVERDEMAND_TEMPLATE = """{city} {district}({district_profile}) 고수요 품목 경쟁 구조 해석
+_OVERDEMAND_TEMPLATE = """{city} {district}({district_profile}) 고수요 품목 진입 가능성 진단
 
-현황:
-- 같은 {city} 내 지역 평균 공고 수: {city_avg:.0f}건
-- 이 지역 고수요 품목 데이터:
+데이터:
+- {city} 지역 평균 공고 수: {city_avg:.0f}건 / 최대: {city_max:.0f}건
+- 분석 품목:
 {items_lines}
 
-해석 기준 참고:
-- competition_score < 0.4 → 기존 지명업체 위주, 신규 진입 어려움
-- competition_score 0.4~0.7 → 부분 개방, 틈새 진입 가능
-- competition_score > 0.7 → 개방경쟁, 신규 진입 여지 있음
-- bid_count가 시/도 평균 대비 5배 이상 → 수요 집중 = 경쟁도 높음 가능성
+판단 기준:
+- competition_score < 0.4: 기존 납품사 포화 → 신규 진입 매우 어려움
+- competition_score 0.4~0.6: 진입 여지 일부 있으나 경쟁 있음
+- competition_score > 0.6: 기존 납품사 적음 → 진입 여지 있음
+- bid_count가 지역 평균 3배 이상: 수요 집중 = 이미 공급자 고착 가능성
 
-위 데이터를 해석해:
-1. 🔴/🟡/🟢 3단계 진입 조건을 명확히 제시하세요.
-2. 진입 주의라면 왜 어려운지 구체적 근거를 대세요.
-3. 조건부·검토라면 어떤 방식으로 접근해야 하는지 실질적 전략을 제시하세요."""
+각 품목에 대해 🔴/🟡/🟢 판정을 내리고, 진입 주의 판정이 나온 품목은 그 이유를 구체적으로 명시하세요.
+데이터 없이 낙관적 해석을 하지 마세요."""
 
 
 def build_overdemand_verdict(ctx: OverdemandContext) -> str:
@@ -319,9 +318,9 @@ def build_overdemand_verdict(ctx: OverdemandContext) -> str:
         import time
 
         items_lines = "\n".join(
-            f"- {h['item']}: 공고 {h['bid_count']}건 (시/도 최대 {ctx.city_max_bid_count:.0f}건), "
-            f"개방경쟁 {h['competition_score']*100:.0f}%, "
-            f"평균 집행일 {h.get('avg_lead_time_days', '?')}일"
+            f"- {h['item']}: 공고 {h['bid_count']}건, "
+            f"진입용이도 {h['competition_score']*100:.0f}%(높을수록 기존납품사 적음), "
+            f"기회점수 {h['opportunity_score']:.1f}점"
             for h in ctx.hot_items
         )
 
@@ -330,6 +329,7 @@ def build_overdemand_verdict(ctx: OverdemandContext) -> str:
             district=ctx.district,
             district_profile=ctx.district_profile,
             city_avg=ctx.city_avg_bid_count,
+            city_max=ctx.city_max_bid_count,
             items_lines=items_lines,
         )
 

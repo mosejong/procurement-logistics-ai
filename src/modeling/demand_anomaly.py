@@ -38,21 +38,24 @@ def detect_blue_ocean(
     df = pd.read_csv(OPP_PATH)
     df = df[df["bid_count"] >= min_bid_count].copy()
 
-    # 수요공백 특성: opportunity_score 높고 competition_score 낮음
-    # competition_score를 반전해 "경쟁 낮음 = 높은 점수"로 변환
+    # 수요공백 특성: opportunity_score 높고 competition_score 높음
+    # 새 competition_score = 같은 품목군 내 공고수 역백분위 (높을수록 기존 납품사 적음 = 진입 용이)
     features = df[["opportunity_score", "competition_score"]].copy()
-    features["competition_gap"] = 1.0 - features["competition_score"]
 
-    X = features[["opportunity_score", "competition_gap"]].values
+    X = features[["opportunity_score", "competition_score"]].values
     X_scaled = MinMaxScaler().fit_transform(X)
 
     iso = IsolationForest(contamination=contamination, random_state=42)
     df["anomaly_label"] = iso.fit_predict(X_scaled)       # -1: 이상치(블루오션 후보)
     df["anomaly_score"] = -iso.score_samples(X_scaled)    # 높을수록 이상도 높음
 
-    # 블루오션 = 이상치 중 opportunity_score 상위
-    blue = df[df["anomaly_label"] == -1].copy()
-    blue = blue.sort_values("anomaly_score", ascending=False).head(top_n)
+    # 블루오션 = 이상치 중 competition_score >= 0.5 (같은 품목군에서 공고 수 하위 50% = 기존 납품사 적음)
+    # competition_score 낮음(< 0.5)은 이미 포화된 대형 시장이므로 제외
+    blue = df[
+        (df["anomaly_label"] == -1) &
+        (df["competition_score"] >= 0.5)
+    ].copy()
+    blue = blue.sort_values("opportunity_score", ascending=False).head(top_n)
     blue["is_blue_ocean"] = True
 
     return blue[[
