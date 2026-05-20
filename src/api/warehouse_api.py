@@ -2,18 +2,25 @@
 국가물류통합정보센터 — 지역별 물류창고업 등록현황 로더
 
 데이터 출처: https://www.nlic.go.kr/nlic/WhsStatsWarehouseLocation.action
-자료명: 지역별 물류창고업등록현황 정보
+자료명: 지역별 물류창고업등록현황 정보 (2026-05-20 기준, 전국 5,911개)
 
 사용 방법:
     1. 위 URL에서 엑셀 다운로드
-    2. data/reference/warehouse_location_stats.csv (또는 .xlsx) 로 저장
+    2. data/reference/warehouse_location_stats.xls 로 저장 (완료)
     3. load_warehouse_stats() 호출
 
-제공 데이터 (시도 단위 집계):
-    - 전체 창고 수 (2026 기준 전국 5,911건)
-    - 물류시설법, 보세창고, 화학류저장
-    - 식품위생법 냉동냉장, 축산물위생법 축산물보관, 수산식품산업법 냉동냉장
-    → food_related_warehouse_count = 식품냉동냉장 + 축산물보관 + 수산냉동냉장
+nlic 파일 컬럼 구조 (고정, header=None 기준):
+    col0: 시도
+    col1: 합계 (warehouse_count)
+    col2: 물류시설법창고 (logistics_facility_law_count)
+    col3: 그외창고 (other_warehouse_count)
+    col4: 냉동창고 (cold_storage_count)
+    col5: 화학류저장창고 (chemical_storage_count)
+    col6: 농산물저온창고 (agri_cold_storage_count)
+    col7: 축산물냉동창고 (livestock_cold_storage_count)
+    col8: 수산식품저온창고 (seafood_cold_storage_count)
+
+food_related_warehouse_count = col4 + col6 + col7 + col8
 """
 
 from pathlib import Path
@@ -22,48 +29,40 @@ import pandas as pd
 ROOT = Path(__file__).parent.parent.parent
 REFERENCE_DIR = ROOT / "data" / "reference"
 
-CSV_PATH = REFERENCE_DIR / "warehouse_location_stats.csv"
+XLS_PATH  = REFERENCE_DIR / "warehouse_location_stats.xls"
 XLSX_PATH = REFERENCE_DIR / "warehouse_location_stats.xlsx"
+CSV_PATH  = REFERENCE_DIR / "warehouse_location_stats.csv"
 
-# 다운로드 파일 컬럼명 → 통일 컬럼명 매핑
-COL_MAP = {
-    "시도": "city", "시·도": "city", "지역": "city",
-    "합계": "warehouse_count", "전체": "warehouse_count", "총계": "warehouse_count",
-    "물류시설법": "logistics_facility_law_count",
-    "보세창고": "bonded_warehouse_count",
-    "화학류저장": "chemical_storage_count",
-    "식품위생법": "food_cold_storage_count",
-    "식품위생법냉동냉장": "food_cold_storage_count",
-    "식품위생법 냉동냉장": "food_cold_storage_count",
-    "축산물위생법": "livestock_storage_count",
-    "축산물위생법축산물보관": "livestock_storage_count",
-    "축산물위생법 축산물보관": "livestock_storage_count",
-    "수산식품산업법": "seafood_cold_storage_count",
-    "수산식품산업법냉동냉장": "seafood_cold_storage_count",
-    "수산식품산업법 냉동냉장": "seafood_cold_storage_count",
+# nlic 파일 고정 컬럼 순서
+NLIC_COLS = {
+    0: "city",
+    1: "warehouse_count",
+    2: "logistics_facility_law_count",
+    3: "other_warehouse_count",
+    4: "cold_storage_count",
+    5: "chemical_storage_count",
+    6: "agri_cold_storage_count",
+    7: "livestock_cold_storage_count",
+    8: "seafood_cold_storage_count",
 }
 
-# 전국 합계 행 제외 키워드
 TOTAL_ROW_KEYWORDS = ["전국", "합계", "전체", "total", "계"]
 
 
 def load_warehouse_stats(path: Path | str | None = None) -> pd.DataFrame:
-    """
-    지역별 물류창고업 등록현황 파일 로드.
-    CSV 또는 Excel 모두 지원. 파일 없으면 빈 DataFrame 반환.
-    """
-    candidates = [Path(path)] if path else [CSV_PATH, XLSX_PATH]
+    """nlic xls/xlsx/csv 파일 로드. 파일 없으면 빈 DataFrame."""
+    candidates = [Path(path)] if path else [XLS_PATH, XLSX_PATH, CSV_PATH]
 
     for p in candidates:
         if not p.exists():
             continue
         try:
             if p.suffix in (".xlsx", ".xls"):
-                df = pd.read_excel(p, header=0)
+                df = pd.read_excel(p, header=None)
             else:
                 for enc in ("utf-8-sig", "cp949", "euc-kr"):
                     try:
-                        df = pd.read_csv(p, encoding=enc)
+                        df = pd.read_csv(p, encoding=enc, header=None)
                         break
                     except UnicodeDecodeError:
                         continue
@@ -77,27 +76,24 @@ def load_warehouse_stats(path: Path | str | None = None) -> pd.DataFrame:
 
 
 def normalize_warehouse_stats(df: pd.DataFrame) -> pd.DataFrame:
-    """컬럼명 통일 + 파생 지표 계산."""
+    """
+    nlic 고정 컬럼 구조로 파싱.
+    헤더 3행(타이틀+2단 헤더) 제거 → 전국합계 행 제거 → 숫자 변환 → food_related 계산.
+    """
     if df.empty:
         return df.copy()
 
     df = df.copy()
 
-    # 컬럼명 정규화 (공백 제거 후 매핑)
-    df.columns = [str(c).strip() for c in df.columns]
-    df = df.rename(columns={k: v for k, v in COL_MAP.items() if k in df.columns})
+    # 헤더 행(0~2) 제거, 컬럼명 할당
+    df = df.iloc[3:].reset_index(drop=True)
+    df = df.rename(columns=NLIC_COLS)
 
     # 전국 합계 행 제거
-    if "city" in df.columns:
-        mask = df["city"].astype(str).str.strip().isin(TOTAL_ROW_KEYWORDS)
-        df = df[~mask].reset_index(drop=True)
+    df = df[~df["city"].astype(str).str.strip().isin(TOTAL_ROW_KEYWORDS)].reset_index(drop=True)
 
-    # 숫자 컬럼 정수 변환
-    num_cols = [
-        "warehouse_count", "logistics_facility_law_count", "bonded_warehouse_count",
-        "chemical_storage_count", "food_cold_storage_count",
-        "livestock_storage_count", "seafood_cold_storage_count",
-    ]
+    # 숫자 컬럼 변환
+    num_cols = [v for v in NLIC_COLS.values() if v != "city"]
     for col in num_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(
@@ -105,8 +101,10 @@ def normalize_warehouse_stats(df: pd.DataFrame) -> pd.DataFrame:
                 errors="coerce"
             ).fillna(0).astype(int)
 
-    # food_related_warehouse_count = 식품냉동냉장 + 축산물보관 + 수산냉동냉장
-    food_cols = [c for c in ["food_cold_storage_count", "livestock_storage_count", "seafood_cold_storage_count"] if c in df.columns]
+    # food_related = 냉동창고 + 농산물저온 + 축산물냉동 + 수산식품저온
+    food_cols = [c for c in ["cold_storage_count", "agri_cold_storage_count",
+                              "livestock_cold_storage_count", "seafood_cold_storage_count"]
+                 if c in df.columns]
     if food_cols:
         df["food_related_warehouse_count"] = df[food_cols].sum(axis=1)
 
