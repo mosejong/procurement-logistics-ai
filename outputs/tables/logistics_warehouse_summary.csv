@@ -1,0 +1,6 @@
+﻿city,warehouse_count,warehouse_area_sum,avg_warehouse_area,cold_storage_count,food_related_warehouse_count,logistics_infra_score
+경기도,3,35000,11667.0,2,2,100.0
+경상북도,1,7000,7000.0,0,0,0.0
+대전광역시,1,9000,9000.0,1,1,12.1
+부산광역시,1,20000,20000.0,0,0,13.9
+인천광역시,1,25000,25000.0,0,0,19.3

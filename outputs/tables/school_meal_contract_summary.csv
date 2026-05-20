@@ -1,0 +1,5 @@
+﻿sido,city,contract_count,contract_amount_sum,buyer_count,supplier_count,top_supplier_region,latest_contract_date
+대구,대구광역시,1,20000000,1,1,경북,2024-03-20
+대전,대전광역시,1,35000000,1,1,충남,2024-06-01
+부산,부산광역시,2,55000000,2,2,전남,2024-05-10
+서울,서울특별시,1,50000000,1,1,경기,2024-03-01

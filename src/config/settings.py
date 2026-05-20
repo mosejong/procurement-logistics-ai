@@ -37,6 +37,10 @@ BASE_URL_POPULATION_AGE = "https://apis.data.go.kr/1741000/주민등록인구기
 BASE_URL_STORE = "https://apis.data.go.kr/B553077/api/open/sdsc2"
 BASE_URL_AWARD = "https://apis.data.go.kr/1230000/ad/BidPublicInfoService"
 
+# aT 학교급식 계약정보 — data.go.kr에서 서비스 URL 확인 후 .env에 설정
+# 미설정 시 collect_school_meal.py가 샘플 데이터로 동작
+BASE_URL_SCHOOL_MEAL = _get_secret("BASE_URL_SCHOOL_MEAL", "")
+
 DATA_RAW_DIR = "data/raw"
 DATA_PROCESSED_DIR = "data/processed"
 OUTPUT_TABLE_DIR = "outputs/tables"
