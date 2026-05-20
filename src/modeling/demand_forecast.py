@@ -85,15 +85,20 @@ def forecast_category(monthly: pd.DataFrame, category: str, months_ahead: int = 
     cat["is_forecast"] = False
     result = pd.concat([cat, pd.DataFrame(future_rows)], ignore_index=True)
 
-    # 트렌드 방향
+    # 트렌드 방향: 최근 6개월 기울기 기준 (전체 평균보다 모멘텀 민감)
     slope = model.coef_[0]
-    result["trend"] = "증가" if slope > 0.5 else ("감소" if slope < -0.5 else "유지")
-    result["slope_per_month"] = round(slope, 2)
+    n_recent = min(6, len(cat))
+    recent_cat = cat.tail(n_recent).reset_index(drop=True)
+    recent_slope = float(np.polyfit(range(n_recent), recent_cat["bid_count"].values, 1)[0])
+    # 최근 기울기가 전체보다 크면 최근 값 우선 사용
+    display_slope = recent_slope if abs(recent_slope) >= abs(slope) else slope
+    result["trend"] = "증가" if display_slope > 1.0 else ("감소" if display_slope < -1.0 else "유지")
+    result["slope_per_month"] = round(display_slope, 2)
 
-    # 계절성 감지: 잔차 변동계수(CV)가 크면 계절성 있음
+    # 계절성 감지: CV > 0.8 (강한 계절성만 경고 — 0.5는 너무 민감)
     cv = float(cat["residual"].std() / (cat["bid_count"].mean() + 1e-9))
     result["seasonal_cv"] = round(cv, 3)
-    result["has_seasonality"] = cv > 0.5  # 변동계수 50% 초과 = 계절성 강함
+    result["has_seasonality"] = cv > 0.8
 
     return result
 

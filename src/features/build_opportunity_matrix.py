@@ -23,7 +23,6 @@ import pandas as pd
 
 from src.config.regions import DISTRICT_PROFILES, REGIONS, get_all_city_district_pairs
 from src.preprocess.clean_bid_data import clean_bid_data
-from src.preprocess.classify_agency import apply_classifications
 
 # 전국 모든 구/시/군 — build_opportunity_matrix의 기본 대상
 TARGET_DISTRICTS: list[str] = [
@@ -37,7 +36,7 @@ SEOUL_TARGET_DISTRICTS: list[str] = REGIONS["서울특별시"]
 
 # 추천에서 제외할 카테고리
 # 진입장벽이 높거나 허가·면허가 필요해 일반 예비창업자에게 추천하기 부적절한 업종
-EXCLUDE_CATEGORIES: set[str] = {"폐기물/환경", "건설/공사", "기타/미분류"}
+EXCLUDE_CATEGORIES: set[str] = {"기타", "건설/감리", "도시정비/재개발"}
 
 # 공고 건수가 이 값 미만이면 데이터부족으로 처리 — 소표본 카테고리의 과신을 방지
 MIN_BID_COUNT_FOR_RECOMMENDATION = 10
@@ -72,8 +71,7 @@ def build_opportunity_matrix(df: pd.DataFrame, target_districts: list[str] | Non
     조달 입찰공고를 '자치구 x 품목군' 단위로 집계합니다.
 
     item_category_detail(신 분류기) 기준으로 groupby.
-    입력 df에 item_category_detail이 없으면 apply_classifications()로 자동 생성.
-    출력 컬럼명은 item_category로 유지해 downstream 코드와 호환.
+    bid_cleaned_national.csv의 item_category를 그대로 사용해 forecast와 카테고리 통일.
     """
     cleaned = clean_bid_data(df)
     districts = target_districts or TARGET_DISTRICTS
@@ -87,10 +85,6 @@ def build_opportunity_matrix(df: pd.DataFrame, target_districts: list[str] | Non
                 "recency_score", "opportunity_score", "recommendation_flag",
             ]
         )
-
-    # item_category_detail이 없으면 신 분류기 적용
-    if "item_category_detail" not in filtered.columns:
-        filtered = apply_classifications(filtered)
 
     # 낙찰 소요일 = 개찰일 - 공고일 (재고회전 지표 대리변수)
     if "opengDt" in filtered.columns and "bidNtceDt" in filtered.columns:
@@ -109,16 +103,14 @@ def build_opportunity_matrix(df: pd.DataFrame, target_districts: list[str] | Non
     if has_lead:
         agg_dict["avg_lead_time_days"] = ("lead_time_days", "mean")
 
-    # 신 분류기(item_category_detail) 기준으로 집계
-    group_cols = ["district", "item_category_detail"]
+    group_cols = ["district", "item_category"]
     if "city" in filtered.columns:
-        group_cols = ["city", "district", "item_category_detail"]
+        group_cols = ["city", "district", "item_category"]
 
     matrix = (
         filtered.groupby(group_cols, dropna=False)
         .agg(**agg_dict)
         .reset_index()
-        .rename(columns={"item_category_detail": "item_category"})
     )
     if has_lead:
         matrix["avg_lead_time_days"] = matrix["avg_lead_time_days"].round(1)

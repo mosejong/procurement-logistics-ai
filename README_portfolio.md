@@ -78,10 +78,9 @@ API 오류 시 수치 기반 폴백 문장으로 자동 대체되며 앱은 정�
   → 전국 시/도 단위 bulk 수집 (build_national_sample.py)
   → 기관명/공고명 분류 (classify_agency.py)
       기관명 → agency_type (8개 유형)
-      공고명 → item_category_detail (18개 세부 유형)
-        1단계: 키워드 규칙 매칭
-        2단계: 미매칭 건에 TF-IDF + Logistic Regression 재분류 (models/item_classifier.pkl)
-        3단계: confidence 낮은 경우 기타/미분류 유지
+      공고명 → item_category (19종, bid_cleaned_national.csv 기준)
+        → 매트릭스·수요예측·블루오션 전 단계에서 동일 카테고리 사용
+      (ML 분류기: agency_type 8종 분류에서 계속 사용 — TF-IDF + LogReg, 정확도 98.6%)
   → 자치구·시·군 × 품목군 매트릭스 생성 (build_opportunity_matrix.py)
   → opportunity_score 산출 (공고수 40% + 금액 25% + 최근성 15% + 경쟁도 20%)
   → 추천 정책 적용 (recommendation_flag: 추천 / 제외 / 데이터부족)
@@ -111,7 +110,7 @@ API 오류 시 수치 기반 폴백 문장으로 자동 대체되며 앱은 정�
 | 지표 | 계산 방식 | 의미 |
 |---|---|---|
 | `opportunity_score` | 공고수(40%) + 금액(25%) + 최근성(15%) + 경쟁도(20%) × 100 | 해당 지역·품목군의 공공수요 종합 매력도 |
-| `competition_score` | 개방입찰 비율 = 1 − 지명경쟁(dsgntCmptYn=Y) 비율 | 신규 진입 용이성 (높을수록 개방적) |
+| `competition_score` | 품목군 내 공고수 역백분위 = 1 − rank(pct=True) | 신규 진입 용이성 (높을수록 기존 납품사 적음) |
 | `recommendation_flag` | 추천 / 제외 / 데이터부족 | 추천 가능 여부 정책 판단 |
 | `bids_per_10k_population` | 공고수 ÷ (인구 / 10,000) | 인구 규모 편향을 보정한 수요 밀도 |
 | `consumer_fit_score` | 주소비층 연령 비중 min-max 정규화 | 인구 구성 기반 소비층 적합도 (전국 242개 지역) |
@@ -126,7 +125,7 @@ API 오류 시 수치 기반 폴백 문장으로 자동 대체되며 앱은 정�
 | 플래그 | 조건 | 처리 |
 |---|---|---|
 | 추천 | 일반 항목 (10건 이상) | 점수 노출 + AI 수요 해석 + AI 진입 판정 |
-| 제외 | 폐기물/환경 · 건설/공사 · 기타/미분류 | TOP3 미노출, 정적 경고 문구 |
+| 제외 | 기타 · 건설/감리 · 도시정비/재개발 | TOP3 미노출, 정적 경고 문구 |
 | 데이터부족 | 공고 건수 10건 미만 | TOP3 미노출 + AI 블루오션/저수요 판정 제공 |
 
 규제 업종이나 진입장벽이 높은 영역, 표본이 적은 카테고리를 분리해  

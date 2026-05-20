@@ -98,6 +98,22 @@ _COL_KR: dict[str, str] = {
     "agency_type": "기관 유형",
 }
 
+# 품목군별 계절성 발생 이유 — has_seasonality=True 경고에서 사용
+_SEASON_REASON: dict[str, str] = {
+    "급식/식품":      "학기 중(3~7월·9~12월) 급식 수요 집중, 방학(1~2월·8월) 발주 급감",
+    "교육/교구":      "신학기 준비(2~3월) 및 연말 잔여예산 소진(11~12월) 집중 발주",
+    "금융/보험":      "회계연도 시작(1~2월) 보험·금융 계약 일괄 갱신 집중",
+    "위생/방역":      "하절기(5~9월) 방역·소독 수요 급증, 동절기 감소",
+    "행사/홍보":      "지역축제·행사 시즌(봄·가을) 및 연말(11~12월) 집중 발주",
+    "환경개선/생활민원": "봄(3~5월) 환경개선·공사 발주 집중",
+    "시설위탁/운영":  "연초(1~2월) 위탁운영 계약 일괄 갱신",
+    "차량/운송":      "연초 예산 집행(1~3월) 및 연말 잔여예산 소진 집중",
+    "사무용품/문구":  "연말(11~12월)·연초(1~2월) 예산 소진·집행 집중 발주",
+    "IT/소프트웨어":  "연말 예산 마감(11~12월) 및 연초 신규 예산 집행(1~3월) 집중",
+    "의료/복지":      "연초 복지 서비스 계약(1~2월) 및 하절기 특수 수요(7~8월) 존재",
+    "시설관리/공사":  "봄·가을 공사 시즌(3~5월, 9~11월) 집중 발주",
+}
+
 # ── 색상 상수 ────────────────────────────────────────────────────────────────
 COLOR_GOOD    = "#16A34A"   # 추천 / 긍정 (초록)
 COLOR_WARN    = "#F59E0B"   # 주의 / 데이터부족 (주황)
@@ -3044,7 +3060,8 @@ with tab_forecast:
         _fc = pd.read_csv(FORECAST_PATH)
 
         _fc_cats = sorted(_fc["item_category"].dropna().unique().tolist())
-        _fc_cities = sorted(_bo["city"].dropna().unique().tolist())
+        # matrix_all 기준 전체 도시 (blue_ocean 파일에 없는 도시도 선택 가능)
+        _fc_cities = sorted(matrix_all["city"].dropna().unique().tolist()) if not matrix_all.empty else sorted(_bo["city"].dropna().unique().tolist())
 
         col_f1, col_f2 = st.columns(2)
         with col_f1:
@@ -3115,9 +3132,6 @@ with tab_forecast:
 
             _seasonal = _fc_view["has_seasonality"].iloc[0] if "has_seasonality" in _fc_view.columns else False
             _cv = _fc_view["seasonal_cv"].iloc[0] if "seasonal_cv" in _fc_view.columns else 0
-            if _seasonal:
-                st.warning(f"⚠️ 계절성 주의: 이 품목군은 월별 변동이 큽니다 (변동계수 {_cv:.2f}). "
-                           "1~2월 집중 발주 등 시기적 요인이 있을 수 있어 선형 예측의 신뢰도가 낮습니다.")
 
             _hist = _fc_view[~_fc_view["is_forecast"].astype(bool)].copy()
             _pred = _fc_view[_fc_view["is_forecast"].astype(bool)].copy()
@@ -3163,10 +3177,11 @@ with tab_forecast:
                     mode="lines", showlegend=False, hoverinfo="skip",
                 ))
 
-            # 예측 3개월 (값 레이블 포함)
+            # 예측 N개월 (값 레이블 포함)
+            _n_pred = len(_pred)
             fig_fc.add_trace(go.Scatter(
                 x=_pred["ym_str"], y=_pred["fitted"],
-                name="예측 (3개월)",
+                name=f"예측 ({_n_pred}개월)",
                 line=dict(color="#DC2626", width=2, dash="dash"),
                 mode="lines+markers+text",
                 marker=dict(size=10, symbol="diamond", color="#DC2626"),
@@ -3192,4 +3207,13 @@ with tab_forecast:
                 )
                 st.dataframe(_summary.rename(columns=_COL_KR), use_container_width=True, hide_index=True)
 
-        st.warning("⚠️ 선형 추세 모델 한계: 계절성·외부 요인 미반영. 트렌드 방향 참고용이며 정밀 예측이 아닙니다.")
+            if _seasonal:
+                _season_reason = _SEASON_REASON.get(
+                    _f_cat,
+                    "정책·예산 집행 주기 또는 수요 특성상 특정 시기에 발주가 집중됩니다."
+                )
+                st.warning(
+                    f"⚠️ 계절성 주의 (변동계수 {_cv:.2f}): {_season_reason} "
+                    f"— 선형 예측의 신뢰도가 낮으며 시기적 요인을 별도로 고려하세요."
+                )
+            st.caption("⚠️ 선형 추세 모델 한계: 계절성·외부 요인 미반영. 트렌드 방향 참고용이며 정밀 예측이 아닙니다.")

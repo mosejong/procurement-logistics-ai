@@ -28,11 +28,11 @@
 | 데이터 | 출처 | API URL | 활용 목적 |
 |---|---|---|---|
 | 입찰공고 데이터 | 조달청 나라장터 | `apis.data.go.kr/1230000/ad/BidPublicInfoService` | 지역·품목별 공공수요 파악 (100,083건) |
-| 낙찰결과 데이터 | 조달청 나라장터 | `apis.data.go.kr/1230000/ad/BidPublicInfoService` | 낙찰 현황 참고 지표 |
-| 주민등록 인구 현황 | 행정안전부 | `apis.data.go.kr/1741000/rdnmAdrBassInfoSvc` | 지역 규모 보정 |
+| 계약정보 데이터 | 조달청 나라장터 | `apis.data.go.kr/1230000/ad/CntrctInfoService` | 의사→실측 확정 신호 (38,367건) |
+| 학교급식 입찰·낙찰 | 한국농수산식품유통공사(aT) | `school.at.or.kr/api` | 급식 품목 수요 실측 (734,242건) |
 | 연령별 인구 통계 | 행정안전부 | `apis.data.go.kr/1741000/admmSexdAgePpltn/selectAdmmSexdAgePpltn` | 소비층 적합도 분석 |
-| 주민등록 세대 현황 | 행정안전부 | `apis.data.go.kr/1741000/세대현황` | 세대 기반 수요 보정 |
 | 상권정보 | 소상공인시장진흥공단 | `apis.data.go.kr/B553077/api/open/sdsc2` | 업종별 경쟁 포화도 분석 |
+| 물류창고 등록정보 | 국토교통부 | 공공데이터포털 | 물류 거점 인프라 분석 (5,911개소) |
 | 신생기업 생존율 | KOSIS (통계청) | `kosis.kr/openapi/statisticsData.do` | 업종별 진입 리스크 참고 지표 |
 
 ---
@@ -81,7 +81,7 @@ Streamlit 대시보드 (streamlit_review.py) — 10개 탭
 
 | 요건 | 구현 |
 |---|---|
-| 공공데이터 API 활용 | ✅ 조달청(필수) + 행안부 인구 + 소상공인 상권정보 + KOSIS 생존율 — 4개 기관 실결합 |
+| 공공데이터 API 활용 | ✅ 조달청 입찰·계약 + aT 학교급식 + 행안부 인구 + 소상공인 상권 + 국토부 물류창고 + KOSIS 생존율 — 6개 기관 실결합 |
 | AI 활용 | ✅ Gemini 해석 5종 (수요설명·수요공백·경쟁구조·물류거점·지역비교) + ML 분류기 |
 | 수집 범위 | ✅ 전국 17개 시/도, 220개 지역, 100,083건, 최근 2년 |
 | 창업 지원 활용성 | ✅ 예비창업자 / 납품업체 / 물류사·3PL 3개 타겟 |
@@ -114,7 +114,7 @@ python -m src.collect.build_national_sample --cities 서울특별시 경기도
 |---|---|---|
 | `opportunity_score` | 공고수(40%) + 금액(25%) + 최근성(15%) + 경쟁도(20%) | 지역·품목 공공수요 종합 매력도 |
 | `adjusted_score` | opportunity_score × 생존율 × (1 − 소멸률) | KOSIS 생존율 보정 점수 |
-| `competition_score` | 개방입찰 비율 = 1 − 지명경쟁(dsgntCmptYn=Y) 비율 | 신규 진입 용이성 |
+| `competition_score` | 품목군 내 공고수 역백분위 = 1 − rank(pct=True, ascending=True) | 신규 진입 용이성 (높을수록 기존 납품사 적음) |
 | `bids_per_10k_population` | 공고수 ÷ (인구 / 10,000) | 인구 규모 편향 보정 수요 밀도 |
 | `consumer_fit_score` | 주소비층 연령 비중 min-max 정규화 | 인구 구성 기반 소비층 적합도 |
 | `stores_per_10k` | 점포수 ÷ (인구 / 10,000) | 업종별 경쟁 포화도 |
@@ -127,23 +127,25 @@ python -m src.collect.build_national_sample --cities 서울특별시 경기도
 | 플래그 | 조건 | 처리 |
 |---|---|---|
 | 추천 | 공고 10건 이상, 비규제 업종 | 점수 노출 + AI 수요 해석 + 경쟁 구조 판정 |
-| 제외 | 폐기물/환경·건설/공사·기타/미분류 | TOP3 미노출, 정적 경고 문구 |
+| 제외 | 기타·건설/감리·도시정비/재개발 | TOP3 미노출, 정적 경고 문구 |
 | 데이터부족 | 공고 10건 미만 | AI 블루오션/저수요 판정 제공 |
 
 ---
 
 ## 분류 체계
 
-### `item_category_detail` (공고명 → 18종)
+### `item_category` (공고명 → 19종)
+
+bid_cleaned_national.csv의 item_category를 매트릭스·수요예측 모두 통일해서 사용합니다.
 
 ```
-청소/환경미화  방역/소독  폐기물/환경  급식/식자재  IT장비/전산
-사무용품/소모품  시설유지보수  교육물품/교구  의료/복지용품  행사/운영용역
-조경/녹지관리  급수/전기/설비  차량/운송  경비/보안  인쇄/홍보물
-건설/공사  보험/금융  전문용역/컨설팅
+IT/소프트웨어  가구/인테리어  건설/감리  교육/교구  금융/보험  급식/식품
+기타  도서/콘텐츠  도시정비/재개발  사무용품/문구  시설관리/공사  시설위탁/운영
+위생/방역  의료/복지  차량/운송  창업/경영지원  행사/홍보  환경개선/생활민원  회계/전문용역
 ```
 
-ML 적용 전 기타/미분류 13.1% → ML 적용 후 **9.2%** (TF-IDF + LogReg fallback)
+> ML 분류기(`item_classifier.pkl`)는 `agency_type` 분류에서 계속 사용합니다.
+> TF-IDF + LogReg, 기타/미분류 13.1% → 9.2% (fallback 적용)
 
 ---
 
