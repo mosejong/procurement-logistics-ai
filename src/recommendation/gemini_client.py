@@ -48,19 +48,21 @@ _SYSTEM_INSTRUCTION = """당신은 공공조달 입찰공고 데이터를 분석
 - "유망합니다", "추천합니다", "좋은 기회입니다" 같은 판단형 표현 금지
 - "~건의 공고가 있었습니다", "~를 의미할 수 있습니다", "참고 지표로 활용하세요" 같은 설명형 표현 사용
 - 2~3문장, 한국어로 간결하게
-- 수치는 구체적으로 언급"""
+- 수치는 반드시 제공된 숫자를 그대로 인용 (절대 임의로 숫자 생성 금지)
+- 마지막 문장은 반드시 "이 수치는 공공조달 참고 지표이며 창업 성공을 보장하지 않습니다." 포함"""
 
 _USER_TEMPLATE = """다음은 {city} {district}의 공공조달 수요 데이터입니다.
 
 품목군: {item_category}
-- 최근 2년 공고 건수: {bid_count}건
-- 총 발주 추정 금액: {amount_sum_str}
-- 공공수요 점수: {opportunity_score:.1f}점 (100점 만점, 공고수·금액·최근성·경쟁도 종합)
-- 소비층 적합도: {consumer_fit_str}
-- 시장 개방도: {competition_str}
-{stores_line}
+- 최근 2년 공고 건수: {bid_count}건  [출처: 나라장터 입찰공고]
+- 총 발주 추정 금액: {amount_sum_str}  [출처: 나라장터 추정가격]
+- 공공수요 점수: {opportunity_score:.1f}점 (100점 만점, 공고수40%·금액25%·최근성15%·경쟁도20% 가중합)
+- 소비층 적합도: {consumer_fit_str}  [출처: 행정안전부 연령별 인구]
+- 시장 개방도: {competition_str}  [출처: 나라장터 입찰방식]
+{stores_line}{confidence_line}
 위 데이터를 바탕으로 이 품목군의 공공조달 수요 특성을 설명해주세요.
-창업 성공 여부가 아닌, 공공기관의 발주 패턴과 수요 규모 관점에서 서술하세요."""
+창업 성공 여부가 아닌, 공공기관의 발주 패턴과 수요 규모 관점에서 서술하세요.
+제공된 수치만 인용하고, 수치에 없는 내용은 추측하지 마세요."""
 
 
 @dataclass
@@ -75,6 +77,7 @@ class DemandContext:
     consumer_fit_score: float | None = None
     stores_per_10k: float | None = None
     competition_score: float | None = None  # 개방경쟁 비율 (0~1)
+    demand_confidence_score: float | None = None  # 공고+낙찰 2단 수요 신뢰도 (0~1, 학교급식 분야)
 
 
 def _format_amount(amount: float) -> str:
@@ -112,7 +115,7 @@ def build_demand_summary(ctx: DemandContext) -> str:
             else "데이터 없음"
         )
         stores_line = (
-            f"- 인구 1만명당 유사 업종 점포 수: {ctx.stores_per_10k:.1f}개\n"
+            f"- 인구 1만명당 유사 업종 점포 수: {ctx.stores_per_10k:.1f}개  [출처: 소상공인 상가정보]\n"
             if ctx.stores_per_10k is not None
             else ""
         )
@@ -121,6 +124,12 @@ def build_demand_summary(ctx: DemandContext) -> str:
             competition_str = f"{pct:.0f}% (지명경쟁 제외 개방입찰 비율, 높을수록 신규진입 용이)"
         else:
             competition_str = "데이터 없음"
+
+        confidence_line = (
+            f"- 수요 신뢰도: {ctx.demand_confidence_score:.2f} (공고=의사 0.5 + 낙찰건수=실측 0.3 + 낙찰금액 0.2, 출처: aT 학교급식)\n"
+            if ctx.demand_confidence_score is not None
+            else ""
+        )
 
         prompt = _USER_TEMPLATE.format(
             city=ctx.city,
@@ -132,6 +141,7 @@ def build_demand_summary(ctx: DemandContext) -> str:
             consumer_fit_str=consumer_fit_str,
             competition_str=competition_str,
             stores_line=stores_line,
+            confidence_line=confidence_line,
         )
 
         last_error = None
@@ -491,6 +501,12 @@ def _fallback_summary(ctx: DemandContext, error: str = "") -> str:
         f"공공수요 점수는 {ctx.opportunity_score:.1f}점으로, "
         f"공고 수·금액 규모·최근성·경쟁도를 종합한 참고 지표입니다.",
     ]
+    if ctx.demand_confidence_score is not None:
+        lines.append(
+            f"aT 학교급식 낙찰 데이터 기반 수요 신뢰도는 {ctx.demand_confidence_score:.2f}로, "
+            f"공고(의사)와 실제 계약(실측)을 함께 반영한 지표입니다."
+        )
+    lines.append("이 수치는 공공조달 참고 지표이며 창업 성공을 보장하지 않습니다.")
     if error:
         lines.append(f"_(AI 해석 생성 실패: {error[:60]})_")
     return " ".join(lines)

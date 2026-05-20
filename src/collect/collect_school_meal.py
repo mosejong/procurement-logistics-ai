@@ -85,7 +85,7 @@ def _summarize_by_city(df: pd.DataFrame, name_col: str = "구매사명",
 
 def run(sample: bool = False, latest_only: bool = False) -> None:
     per_page = 100 if sample else 1000
-    max_pages = 1 if sample else 200
+    max_pages = 1 if sample else 9999
 
     TABLES_DIR.mkdir(parents=True, exist_ok=True)
 

@@ -104,7 +104,7 @@ def _get_page(url: str, page: int, per_page: int = 1000) -> dict:
     return r.json()
 
 
-def fetch_all(url: str, max_pages: int = 200, per_page: int = 1000, verbose: bool = True) -> pd.DataFrame:
+def fetch_all(url: str, max_pages: int = 9999, per_page: int = 1000, verbose: bool = True) -> pd.DataFrame:
     """전체 페이지 수집."""
     first = _get_page(url, 1, per_page)
     total = first.get("matchCount", 0)
