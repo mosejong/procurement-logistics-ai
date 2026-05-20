@@ -1,5 +1,51 @@
 # Changelog
 
+## [2026-05-21] 발주계획 + 종합쇼핑몰 MAS API 연동 — AI 해석 컨텍스트 자동 주입
+
+### 핵심 변경
+
+**`src/api/procurement_plan_api.py`** (신규)
+- `get_plan_items` / `get_plan_services`: 향후 발주계획 조회 (물품/용역)
+- `collect_plan_all(months_ahead=6)`: 향후 N개월 전수 수집
+- `get_mas_products`: 종합쇼핑몰 다수공급자계약 품목 조회 (`getMASCntrctPrdctInfoList`)
+- `collect_mas_products(max_records=5000)`: MAS 계약 품목 전수 수집
+- 403 오류 시 `PermissionError` 명시 (승인 대기 안내)
+
+**`src/collect/collect_plan_data.py`** (신규)
+- 발주계획 445건 수집 → 시/도×품목군 집계 → `procurement_plan_summary.csv`
+  - `orderInsttNm` 기반 시/도 추출 (17개 시/도 매핑)
+  - `prdctClsfcNoNm` + `bizNm` 키워드 기반 item_category 매핑
+  - 총 발주금액 1,249.8억원
+- MAS 품목 5,000건 수집 → 품목군별 집계 → `shopping_mall_summary.csv`
+  - `prdctLrgclsfcNm` 직접 매핑 테이블 (`_MAS_LRG_MAP`): 8개 품목군 확인
+  - 사무용품/문구 2,321건(평균 34.7만원), 전기/전자 1,211건(평균 875만원) 등
+
+**`src/recommendation/gemini_client.py`** 업데이트
+- `_load_plan_df` / `_load_shop_df`: `@lru_cache` 1회 로딩
+- `_lookup_plan(city, category)` / `_lookup_shop(city, category)`: CSV 조회
+- `build_demand_summary` 내 자동 주입: CSV 존재 시 프롬프트에 추가
+  - "향후 6개월 발주계획: N건 (X억원)  [출처: 나라장터 발주계획]"
+  - "종합쇼핑몰 MAS 등록 품목 수: N건 (평균단가 Y원)  [출처: 나라장터 다수공급자계약]"
+- `DemandContext`에 `plan_count`, `plan_amount`, `shopping_count`, `shopping_amount` 필드 추가 (선택적 직접 주입용)
+- CSV 없으면 조용히 생략 → 기존 호환성 유지
+
+### 데이터 생성
+```
+python -m src.collect.collect_plan_data
+  → outputs/tables/procurement_plan_summary.csv  (130행, 17개 시/도 × 품목군)
+  → outputs/tables/shopping_mall_summary.csv     (8행, 품목군별 MAS 집계)
+```
+
+### API 엔드포인트
+- 발주계획: `https://apis.data.go.kr/1230000/ao/OrderPlanSttusService`
+- 종합쇼핑몰: `https://apis.data.go.kr/1230000/at/ShoppingMallPrdctInfoService`
+
+### 갱신 주기
+- 발주계획: 월 1회 (`--plan-only`)
+- MAS 품목: 분기 1회 (`--shop-only`)
+
+---
+
 ## [2026-05-20] 점수 신뢰도 전면 개선 + 문서 통합
 
 ### 핵심 변경

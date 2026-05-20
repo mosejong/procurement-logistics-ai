@@ -18,10 +18,54 @@ Gemini API 연동: 공공수요 데이터 기반 설명형 문장 생성
 
 import os
 from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
 
+import pandas as pd
 from dotenv import load_dotenv
 
 load_dotenv()
+
+_PLAN_CSV = Path("outputs/tables/procurement_plan_summary.csv")
+_SHOP_CSV = Path("outputs/tables/shopping_mall_summary.csv")
+
+
+@lru_cache(maxsize=1)
+def _load_plan_df() -> pd.DataFrame:
+    if _PLAN_CSV.exists():
+        return pd.read_csv(_PLAN_CSV)
+    return pd.DataFrame()
+
+
+@lru_cache(maxsize=1)
+def _load_shop_df() -> pd.DataFrame:
+    if _SHOP_CSV.exists():
+        return pd.read_csv(_SHOP_CSV)
+    return pd.DataFrame()
+
+
+def _lookup_plan(city: str, item_category: str) -> tuple[int, float]:
+    """발주계획 집계 CSV에서 (건수, 금액합계) 반환. 없으면 (0, 0)."""
+    df = _load_plan_df()
+    if df.empty:
+        return 0, 0.0
+    row = df[(df["city"] == city) & (df["item_category"] == item_category)]
+    if row.empty:
+        return 0, 0.0
+    return int(row["plan_count"].iloc[0]), float(row["plan_amount_sum"].iloc[0])
+
+
+def _lookup_shop(city: str, item_category: str) -> tuple[int, float]:
+    """MAS 품목 집계 CSV에서 (품목수, 평균단가) 반환. MAS는 전국 단위라 city 무시."""
+    df = _load_shop_df()
+    if df.empty:
+        return 0, 0.0
+    row = df[df["item_category"] == item_category]
+    if row.empty:
+        return 0, 0.0
+    cnt = int(row["shopping_count"].iloc[0])
+    price_avg = float(row.get("price_avg", pd.Series([0])).iloc[0]) if "price_avg" in row.columns else 0.0
+    return cnt, price_avg
 
 # ── 추천 정책 상수 ─────────────────────────────────────────────────
 _STATIC_MESSAGES = {
@@ -60,7 +104,7 @@ _USER_TEMPLATE = """다음은 {city} {district}의 공공조달 수요 데이터
 - 공공수요 점수: {opportunity_score:.1f}점 (100점 만점, 공고수40%·금액25%·최근성15%·경쟁도20% 가중합)
 - 소비층 적합도: {consumer_fit_str}  [출처: 행정안전부 연령별 인구]
 - 시장 개방도: {competition_str}  [출처: 나라장터 입찰방식]
-{stores_line}{confidence_line}
+{stores_line}{confidence_line}{plan_line}{shop_line}
 위 데이터를 바탕으로 이 품목군의 공공조달 수요 특성을 설명해주세요.
 창업 성공 여부가 아닌, 공공기관의 발주 패턴과 수요 규모 관점에서 서술하세요.
 제공된 수치만 인용하고, 수치에 없는 내용은 추측하지 마세요."""
@@ -79,6 +123,10 @@ class DemandContext:
     stores_per_10k: float | None = None
     competition_score: float | None = None  # 개방경쟁 비율 (0~1)
     demand_confidence_score: float | None = None  # 공고+낙찰 2단 수요 신뢰도 (0~1, 학교급식 분야)
+    plan_count: int | None = None          # 향후 발주계획 건수 (수집 후 자동주입)
+    plan_amount: float | None = None       # 향후 발주계획 금액합계
+    shopping_count: int | None = None      # 최근 종합쇼핑몰 납품요구 건수
+    shopping_amount: float | None = None   # 최근 종합쇼핑몰 납품요구 금액합계
 
 
 def _format_amount(amount: float) -> str:
@@ -132,6 +180,32 @@ def build_demand_summary(ctx: DemandContext) -> str:
             else ""
         )
 
+        # 발주계획 — ctx에 직접 세팅된 값 우선, 없으면 CSV 자동 조회
+        plan_cnt = ctx.plan_count
+        plan_amt = ctx.plan_amount
+        if plan_cnt is None:
+            plan_cnt, plan_amt = _lookup_plan(ctx.city, ctx.item_category)
+        plan_line = (
+            f"- 향후 6개월 발주계획: {plan_cnt}건"
+            + (f" ({_format_amount(plan_amt)})" if plan_amt else "")
+            + "  [출처: 나라장터 발주계획]\n"
+            if plan_cnt and plan_cnt > 0
+            else ""
+        )
+
+        # 종합쇼핑몰 납품요구
+        shop_cnt = ctx.shopping_count
+        shop_amt = ctx.shopping_amount
+        if shop_cnt is None:
+            shop_cnt, shop_amt = _lookup_shop(ctx.city, ctx.item_category)
+        shop_line = (
+            f"- 종합쇼핑몰 MAS 등록 품목 수: {shop_cnt}건"
+            + (f" (평균단가 {_format_amount(shop_amt)})" if shop_amt and shop_amt > 0 else "")
+            + "  [출처: 나라장터 다수공급자계약]\n"
+            if shop_cnt and shop_cnt > 0
+            else ""
+        )
+
         prompt = _USER_TEMPLATE.format(
             city=ctx.city,
             district=ctx.district,
@@ -143,6 +217,8 @@ def build_demand_summary(ctx: DemandContext) -> str:
             competition_str=competition_str,
             stores_line=stores_line,
             confidence_line=confidence_line,
+            plan_line=plan_line,
+            shop_line=shop_line,
         )
 
         last_error = None

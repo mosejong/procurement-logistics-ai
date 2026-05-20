@@ -28,7 +28,9 @@
 | 데이터 | 출처 | API URL | 활용 목적 |
 |---|---|---|---|
 | 입찰공고 데이터 | 조달청 나라장터 | `apis.data.go.kr/1230000/ad/BidPublicInfoService` | 지역·품목별 공공수요 파악 (100,083건) |
-| 계약정보 데이터 | 조달청 나라장터 | `apis.data.go.kr/1230000/ad/CntrctInfoService` | 의사→실측 확정 신호 (38,367건) |
+| 계약정보 데이터 | 조달청 나라장터 | `apis.data.go.kr/1230000/ao/CntrctInfoService` | 의사→실측 확정 신호 (38,367건) |
+| 발주계획 | 조달청 나라장터 | `apis.data.go.kr/1230000/ao/OrderPlanSttusService` | 향후 6개월 예정 발주 (445건, AI 해석 컨텍스트) |
+| 종합쇼핑몰 MAS 품목 | 조달청 나라장터 | `apis.data.go.kr/1230000/at/ShoppingMallPrdctInfoService` | 다수공급자계약 단가 시장 규모 (5,000건, AI 해석 컨텍스트) |
 | 학교급식 입찰·낙찰 | 한국농수산식품유통공사(aT) | `school.at.or.kr/api` | 급식 품목 수요 실측 (734,242건) |
 | 연령별 인구 통계 | 행정안전부 | `apis.data.go.kr/1741000/admmSexdAgePpltn/selectAdmmSexdAgePpltn` | 소비층 적합도 분석 |
 | 상권정보 | 소상공인시장진흥공단 | `apis.data.go.kr/B553077/api/open/sdsc2` | 업종별 경쟁 포화도 분석 |
@@ -62,7 +64,12 @@ KOSIS 신생기업 생존율 API
   → build_map_summary.py
       adjusted_score = opportunity_score × (survival_5y/100) × (1 - dissolution_rate)
 
+조달청 발주계획 API + 종합쇼핑몰 MAS API
+  → collect_plan_data.py (445건 발주계획 + 5,000건 MAS 품목)
+  → procurement_plan_summary.csv / shopping_mall_summary.csv
+
 Gemini API (gemini_client.py) — AI 해석 5종 (정량 지표를 사람이 이해하기 쉬운 설명으로 변환)
+  자동 컨텍스트 주입: 발주계획 건수·금액 + MAS 등록 품목수·평균단가 → 프롬프트 삽입
   ① 수요 설명: 추천 품목 공공수요 해석 문장
   ② 수요 공백: 데이터부족 → 블루오션 vs 실제 저수요 해석
   ③ 경쟁 구조: 고수요 지역 → 🔴진입 주의 / 🟡조건부 검토 / 🟢진입 검토
@@ -81,7 +88,7 @@ Streamlit 대시보드 (streamlit_review.py) — 10개 탭
 
 | 요건 | 구현 |
 |---|---|
-| 공공데이터 API 활용 | ✅ 조달청 입찰·계약 + aT 학교급식 + 행안부 인구 + 소상공인 상권 + 국토부 물류창고 + KOSIS 생존율 — 6개 기관 실결합 |
+| 공공데이터 API 활용 | ✅ 조달청(입찰·계약·발주계획·MAS) + aT 학교급식 + 행안부 인구 + 소상공인 상권 + 국토부 물류창고 + KOSIS 생존율 — 8개 데이터소스 실결합 |
 | AI 활용 | ✅ Gemini 해석 5종 (수요설명·수요공백·경쟁구조·물류거점·지역비교) + ML 분류기 |
 | 수집 범위 | ✅ 전국 17개 시/도, 220개 지역, 100,083건, 최근 2년 |
 | 창업 지원 활용성 | ✅ 예비창업자 / 납품업체 / 물류사·3PL 3개 타겟 |
