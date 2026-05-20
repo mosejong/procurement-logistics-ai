@@ -374,11 +374,13 @@ _TAB_LABELS = [
     "🌏 전국 지도", "🔍 사업 유형 검색", "🗺️ 지역 분석",
     "📦 품목 분석", "⚖️ 자치구 비교", "👥 소비층 적합도",
     "🏪 경쟁 분석", "🚚 물류 거점 분석", "🔬 분석 근거 데이터", "📋 프로젝트 개요",
+    "🔭 수요 예측",
 ]
 (
     tab_map, tab_search, tab_region,
     tab_item, tab_compare, tab_consumer,
     tab_competition, tab_logistics, tab_raw, tab_overview,
+    tab_forecast,
 ) = st.tabs(_TAB_LABELS)
 
 # ── JS 탭 전환 (버튼 클릭 후 다음 rerun에서 실행) ─────────────────────────────
@@ -2994,3 +2996,91 @@ with tab_raw:
     if REPORT_PATH.exists():
         with st.expander("자동 생성 요약 리포트"):
             st.markdown(REPORT_PATH.read_text(encoding="utf-8"))
+
+# ── 수요 예측 탭 (블루오션 판정 + 트렌드 통합) ───────────────────────────────
+BLUE_OCEAN_PATH = TABLES_DIR / "blue_ocean_districts.csv"
+FORECAST_PATH   = TABLES_DIR / "demand_forecast.csv"
+
+with tab_forecast:
+    st.subheader("🔭 공공수요 예측 — 블루오션 판정 + 트렌드")
+    st.caption("지역·품목을 선택하면 수요공백(블루오션/레드오션) 판정과 향후 3개월 트렌드를 함께 보여줍니다.")
+
+    _bo_ok = BLUE_OCEAN_PATH.exists()
+    _fc_ok = FORECAST_PATH.exists()
+
+    if not _bo_ok or not _fc_ok:
+        st.warning("데이터 파일이 없습니다. `python -m src.modeling.demand_anomaly` 및 `python -m src.modeling.demand_forecast` 실행 후 재시작하세요.")
+    else:
+        _bo = pd.read_csv(BLUE_OCEAN_PATH)
+        _fc = pd.read_csv(FORECAST_PATH)
+
+        _fc_cats = sorted(_fc["item_category"].dropna().unique().tolist())
+        _fc_cities = sorted(_bo["city"].dropna().unique().tolist())
+
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            _f_city = st.selectbox("시/도", ["전체"] + _fc_cities, key="fc_city")
+        with col_f2:
+            _f_cat = st.selectbox("품목군", _fc_cats, key="fc_cat")
+
+        # ── 블루오션 판정 카드 ──────────────────────────────────────────────
+        st.markdown("---")
+        _bo_match = _bo[_bo["item_category"] == _f_cat]
+        if _f_city != "전체":
+            _bo_match = _bo_match[_bo_match["city"] == _f_city]
+
+        if not _bo_match.empty:
+            top = _bo_match.sort_values("anomaly_score", ascending=False).iloc[0]
+            opp  = top["opportunity_score"]
+            comp = top["competition_score"]
+            label = "🟢 블루오션" if comp < 0.45 and opp > 20 else ("🔴 레드오션" if comp > 0.7 else "🟡 중간")
+            col_c1, col_c2, col_c3 = st.columns(3)
+            col_c1.metric("수요공백 판정", label)
+            col_c2.metric("공공수요 점수", f"{opp:.1f}점")
+            col_c3.metric("경쟁도", f"{comp:.2f}")
+            st.caption(f"대표 지역: {top['city']} {top['district']} ({top['bid_count']}건)")
+        else:
+            st.info(f"선택한 조건의 블루오션 탐지 결과가 없습니다. ({_f_city} / {_f_cat})")
+
+        # ── 트렌드 + 3개월 예측 차트 ────────────────────────────────────────
+        st.markdown("---")
+        _fc_view = _fc[_fc["item_category"] == _f_cat].copy()
+
+        if not _fc_view.empty:
+            trend = _fc_view["trend"].iloc[0]
+            slope = _fc_view["slope_per_month"].iloc[0]
+            trend_icon = {"증가": "📈", "감소": "📉", "유지": "➡️"}.get(trend, "")
+            st.markdown(f"**{_f_cat} 트렌드: {trend_icon} {trend}** (월 {slope:+.1f}건)")
+
+            _hist = _fc_view[~_fc_view["is_forecast"].astype(bool)].copy()
+            _pred = _fc_view[_fc_view["is_forecast"].astype(bool)].copy()
+
+            fig_fc = go.Figure()
+            fig_fc.add_trace(go.Bar(
+                x=_hist["ym_str"], y=_hist["bid_count"],
+                name="실제 공고 건수", marker_color="#4C72B0", opacity=0.7,
+            ))
+            fig_fc.add_trace(go.Scatter(
+                x=_hist["ym_str"], y=_hist["fitted"],
+                name="추세선", line=dict(color="orange", dash="dot"),
+            ))
+            fig_fc.add_trace(go.Scatter(
+                x=_pred["ym_str"], y=_pred["fitted"],
+                name="예측 (3개월)", line=dict(color="red", dash="dash"),
+                mode="lines+markers", marker=dict(size=8, symbol="diamond"),
+            ))
+            fig_fc.update_layout(
+                xaxis_title="연월", yaxis_title="공고 건수",
+                legend=dict(orientation="h"), height=380,
+            )
+            st.plotly_chart(fig_fc, use_container_width=True)
+
+            with st.expander("전체 카테고리 트렌드 요약"):
+                _summary = (
+                    _fc.groupby("item_category")[["trend", "slope_per_month"]]
+                    .first().reset_index()
+                    .sort_values("slope_per_month", ascending=False)
+                )
+                st.dataframe(_summary, use_container_width=True, hide_index=True)
+
+        st.warning("⚠️ 선형 추세 모델 한계: 계절성·외부 요인 미반영. 트렌드 방향 참고용이며 정밀 예측이 아닙니다.")
