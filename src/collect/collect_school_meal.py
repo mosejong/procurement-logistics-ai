@@ -1,22 +1,22 @@
 """
-aT 학교급식 계약정보 수집 + 지역별 요약
+aT 학교급식 낙찰/입찰 현황 수집 + 지역별 요약
 
 역할:
-    aT 학교급식 계약정보를 시도별로 수집해 지역별 요약 테이블을 만듭니다.
-    입찰공고의 급식/식자재 수요와 함께 "공고=의사 / 계약=실측" 2단 구조를 구성합니다.
+    낙찰(165,461건)과 입찰(83,963건) 데이터를 수집해
+    구매사명(학교명)에서 시도를 추출하고 지역별로 집계합니다.
 
-출력: outputs/tables/school_meal_contract_summary.csv
-컬럼: region, contract_count, contract_amount_sum, buyer_count,
-       supplier_count, top_supplier_region, latest_contract_date
+    입찰 = 공공기관의 구매 의향 (예정 수요)
+    낙찰 = 실제 계약 완료 (확정 수요)
+    → "공고=의사 / 계약=실측" 2단 구조의 급식 버전
+
+출력:
+    outputs/tables/school_meal_bid_summary.csv   — 입찰 지역별 집계
+    outputs/tables/school_meal_award_summary.csv — 낙찰 지역별 집계
+    outputs/tables/school_meal_contract_summary.csv — 통합 요약
 
 실행:
     python -m src.collect.collect_school_meal
-    python -m src.collect.collect_school_meal --sido 부산 서울
-
-샘플 CSV 모드:
-    BASE_URL_SCHOOL_MEAL이 .env에 없으면 샘플 데이터로 동작합니다.
-    실제 API를 쓰려면 data.go.kr에서 "aT 학교급식 계약정보" 서비스 URL을 확인해
-    .env에 BASE_URL_SCHOOL_MEAL=https://... 로 추가하세요.
+    python -m src.collect.collect_school_meal --sample   # 샘플 100건만
 """
 
 import argparse
@@ -24,121 +24,85 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.config.settings import BASE_URL_SCHOOL_MEAL, OUTPUT_TABLE_DIR
+from src.api.school_meal_api import (
+    URL_AWARD, URL_BID, fetch_all, extract_sido
+)
 
 ROOT = Path(__file__).parent.parent.parent
 TABLES_DIR = ROOT / "outputs" / "tables"
-OUT_PATH = TABLES_DIR / "school_meal_contract_summary.csv"
-
-SIDO_LIST = [
-    "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종",
-    "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주",
-]
-
-SIDO_TO_CITY = {
-    "서울": "서울특별시", "부산": "부산광역시", "대구": "대구광역시",
-    "인천": "인천광역시", "광주": "광주광역시", "대전": "대전광역시",
-    "울산": "울산광역시", "세종": "세종특별자치시", "경기": "경기도",
-    "강원": "강원특별자치도", "충북": "충청북도", "충남": "충청남도",
-    "전북": "전라북도", "전남": "전라남도", "경북": "경상북도",
-    "경남": "경상남도", "제주": "제주특별자치도",
-}
 
 
-def _sample_data() -> pd.DataFrame:
-    """API 미연결 시 구조 확인용 샘플 데이터."""
-    rows = [
-        {"purchsInsttSido": "서울", "ctrtAmt": 50000000, "purchsInsttNm": "○○초등학교", "shtNm": "A식자재", "shtSido": "경기", "ctrtDate": "2024-03-01"},
-        {"purchsInsttSido": "부산", "ctrtAmt": 30000000, "purchsInsttNm": "△△중학교", "shtNm": "B농산물", "shtSido": "전남", "ctrtDate": "2024-04-15"},
-        {"purchsInsttSido": "부산", "ctrtAmt": 25000000, "purchsInsttNm": "□□고등학교", "shtNm": "C유통", "shtSido": "부산", "ctrtDate": "2024-05-10"},
-        {"purchsInsttSido": "대구", "ctrtAmt": 20000000, "purchsInsttNm": "◇◇초등학교", "shtNm": "D식품", "shtSido": "경북", "ctrtDate": "2024-03-20"},
-        {"purchsInsttSido": "대전", "ctrtAmt": 35000000, "purchsInsttNm": "★★학교", "shtNm": "E유통", "shtSido": "충남", "ctrtDate": "2024-06-01"},
-    ]
-    df = pd.DataFrame(rows)
-    df["ctrtDate"] = pd.to_datetime(df["ctrtDate"])
-    return df
+def _summarize_by_city(df: pd.DataFrame, name_col: str = "구매사명") -> pd.DataFrame:
+    """구매사명에서 시도 추출 후 집계."""
+    df = df.copy()
+    df["city"] = df[name_col].apply(extract_sido)
+
+    grp = df.groupby("city")
+    summary = grp.agg(count=("city", "count")).reset_index()
+    summary["school_count"] = grp[name_col].nunique().values
+
+    # 기타 비율 표시
+    total = len(df)
+    other = len(df[df["city"] == "기타"])
+    print(f"  지역 매핑: {total - other:,}/{total:,}건 ({(total-other)/total*100:.1f}%) 성공, 기타 {other:,}건")
+
+    return summary.sort_values("count", ascending=False).reset_index(drop=True)
 
 
-def _collect_api(sido_list: list[str]) -> pd.DataFrame:
-    """실제 API 호출 (BASE_URL_SCHOOL_MEAL 설정 필요)."""
-    from src.api.school_meal_api import get_school_meal_contracts, clean_school_meal
-
-    frames = []
-    for sido in sido_list:
-        print(f"  [{sido}] 수집 중...")
-        for page in range(1, 11):
-            df = get_school_meal_contracts(page_no=page, num_of_rows=100, sido=sido, verbose=False)
-            if df.empty:
-                break
-            frames.append(df)
-
-    if not frames:
-        return pd.DataFrame()
-
-    raw = pd.concat(frames, ignore_index=True).drop_duplicates()
-    return clean_school_meal(raw)
-
-
-def _summarize(df: pd.DataFrame) -> pd.DataFrame:
-    """시도별 집계."""
-    if "purchsInsttSido" not in df.columns:
-        return pd.DataFrame()
-
-    grp = df.groupby("purchsInsttSido")
-
-    summary_rows = []
-    for sido, group in grp:
-        top_supplier = (
-            group["shtSido"].value_counts().index[0]
-            if "shtSido" in group.columns and not group["shtSido"].isna().all()
-            else None
-        )
-        summary_rows.append({
-            "sido": sido,
-            "city": SIDO_TO_CITY.get(sido, sido),
-            "contract_count": len(group),
-            "contract_amount_sum": group["ctrtAmt"].sum() if "ctrtAmt" in group.columns else 0,
-            "buyer_count": group["purchsInsttNm"].nunique() if "purchsInsttNm" in group.columns else 0,
-            "supplier_count": group["shtNm"].nunique() if "shtNm" in group.columns else 0,
-            "top_supplier_region": top_supplier,
-            "latest_contract_date": group["ctrtDate"].max().strftime("%Y-%m-%d")
-                                    if "ctrtDate" in group.columns and not group["ctrtDate"].isna().all()
-                                    else None,
-        })
-
-    return pd.DataFrame(summary_rows)
-
-
-def run(sido_list: list[str] | None = None) -> None:
-    targets = sido_list or SIDO_LIST
-
-    use_api = bool(BASE_URL_SCHOOL_MEAL)
-
-    if use_api:
-        print("[학교급식] API 모드")
-        df = _collect_api(targets)
-    else:
-        print("[학교급식] 샘플 모드 (BASE_URL_SCHOOL_MEAL 미설정)")
-        print("  → data.go.kr에서 'aT 학교급식 계약정보' 서비스 URL을 .env에 추가하면 실데이터로 전환됩니다.")
-        df = _sample_data()
-
-    if df.empty:
-        print("[경고] 데이터 없음. API 설정 확인 필요.")
-        return
-
-    summary = _summarize(df)
-    if summary.empty:
-        print("[경고] 집계 실패.")
-        return
+def run(sample: bool = False) -> None:
+    per_page = 100 if sample else 1000
+    max_pages = 1 if sample else 200
 
     TABLES_DIR.mkdir(parents=True, exist_ok=True)
-    summary.to_csv(OUT_PATH, index=False, encoding="utf-8-sig")
-    print(f"[OK] {OUT_PATH.name} ({len(summary)}행)")
-    print(summary.to_string(index=False))
+
+    # ── 1. 입찰 수집 ──────────────────────────────────────────────────
+    print("[1/3] 학교급식 입찰 현황 수집...")
+    df_bid = fetch_all(URL_BID, max_pages=max_pages, per_page=per_page)
+    print(f"  수집: {len(df_bid):,}건")
+
+    bid_summary = _summarize_by_city(df_bid, "구매사명")
+    bid_summary = bid_summary.rename(columns={"count": "bid_count", "school_count": "school_bid_count"})
+    bid_path = TABLES_DIR / "school_meal_bid_summary.csv"
+    bid_summary.to_csv(bid_path, index=False, encoding="utf-8-sig")
+    print(f"  [OK] {bid_path.name}")
+
+    # ── 2. 낙찰 수집 ──────────────────────────────────────────────────
+    print("\n[2/3] 학교급식 낙찰 현황 수집...")
+    df_award = fetch_all(URL_AWARD, max_pages=max_pages, per_page=per_page)
+    print(f"  수집: {len(df_award):,}건")
+
+    award_summary = _summarize_by_city(df_award, "구매사명")
+    award_summary = award_summary.rename(columns={"count": "award_count", "school_count": "school_award_count"})
+    award_path = TABLES_DIR / "school_meal_award_summary.csv"
+    award_summary.to_csv(award_path, index=False, encoding="utf-8-sig")
+    print(f"  [OK] {award_path.name}")
+
+    # ── 3. 통합 요약 ──────────────────────────────────────────────────
+    print("\n[3/3] 통합 요약 생성...")
+    merged = bid_summary.merge(award_summary, on="city", how="outer").fillna(0)
+    merged["bid_count"]   = merged["bid_count"].astype(int)
+    merged["award_count"] = merged["award_count"].astype(int)
+
+    # 낙찰 전환율 (낙찰 / 입찰)
+    merged["award_conversion_rate"] = (
+        merged["award_count"] / merged["bid_count"].replace(0, float("nan"))
+    ).round(3).fillna(0)
+
+    out_path = TABLES_DIR / "school_meal_contract_summary.csv"
+    merged.to_csv(out_path, index=False, encoding="utf-8-sig")
+    print(f"  [OK] {out_path.name}")
+
+    # 결과 출력
+    with open(f"{TABLES_DIR}/school_meal_result.txt", "w", encoding="utf-8") as f:
+        f.write(merged.to_string(index=False))
+
+    result_path = TABLES_DIR / "school_meal_result.txt"
+    with open(result_path, encoding="utf-8") as f:
+        print(f.read())
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="aT 학교급식 계약정보 수집")
-    parser.add_argument("--sido", nargs="+", help="수집할 시도 단축명 (예: 부산 서울)")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--sample", action="store_true", help="100건만 수집 (테스트용)")
     args = parser.parse_args()
-    run(sido_list=args.sido)
+    run(sample=args.sample)
