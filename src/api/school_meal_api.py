@@ -35,6 +35,43 @@ SCHOOL_SIDO_KEYWORDS: dict[str, str] = {
     "경남": "경상남도", "제주": "제주특별자치도",
 }
 
+# 학교명 → 시도 직접 매핑 (GPT 생성, 미매핑 상위 30개 기준)
+# 주의: 동명이교 가능성이 있는 항목은 주석 표시.
+# 향후 원본 데이터에 학교 주소·교육청·지역 컬럼이 추가되면 그 값을 우선 사용하고,
+# 이 dict는 fallback으로만 사용할 것.
+SCHOOL_CITY_MAP: dict[str, str] = {
+    "명지초등학교": "서울특별시",
+    "영흥고등학교": "전라남도",        # 주의: 인천 동명 후보
+    "순창고등학교": "전라북도",
+    "산외초등학교": "전라북도",        # 주의: 경남/충북 동명 후보
+    "광양제철고등학교": "전라남도",
+    "오현고등학교": "제주특별자치도",
+    "덕원여자고등학교": "서울특별시",
+    "백석중학교": "경기도",            # 주의: 서울/경기/인천/충남 동명 후보
+    "문지초등학교": "대전광역시",
+    "고창북고등학교": "전라북도",
+    "덕암정보고등학교": "전라북도",
+    "동암차돌학교": "전라북도",
+    "순천금당고등학교": "전라남도",
+    "장성고등학교": "전라남도",
+    "신명초등학교": "부산광역시",      # 주의: 서울신명/김해신명 유사명
+    "부안해오름유치원": "전라북도",
+    "명지꿈자람유치원": "부산광역시",
+    "언남고등학교": "서울특별시",
+    "대일외국어고등학교": "서울특별시",
+    "성동초등학교": "서울특별시",      # 주의: 충남/울산/경북 동명 후보
+    "대연고등학교": "부산광역시",
+    "동천초등학교": "부산광역시",      # 주의: 울산/경북/대구 동명 후보
+    "부암초등학교": "부산광역시",
+    "신촌초등학교": "부산광역시",      # 주의: 인천/경기 동명 후보
+    "정관초등학교": "부산광역시",
+    "죽성초등학교": "부산광역시",
+    "내리초등학교": "부산광역시",      # 주의: 인천 폐교/전남 동명 후보
+    "명호초등학교": "부산광역시",      # 주의: 경북 봉화 동명 후보
+    "숭덕여자고등학교": "인천광역시",
+    "대월초등학교": "경기도",          # 주의: 인천 강화 동명 후보
+}
+
 
 def _get_page(url: str, page: int, per_page: int = 1000) -> dict:
     r = requests.get(
@@ -70,11 +107,40 @@ def fetch_all(url: str, max_pages: int = 200, per_page: int = 1000, verbose: boo
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
 
-def extract_sido(school_name: str) -> str:
-    """학교명에서 시도 추출. 매핑 실패 시 '기타'."""
+def load_neis_cache() -> dict[str, str]:
+    """NEIS 자동 매핑 캐시 로드. 파일 없으면 빈 dict."""
+    from pathlib import Path
+    csv_path = Path(__file__).parent.parent.parent / "data" / "reference" / "school_city_map_neis.csv"
+    if not csv_path.exists():
+        return {}
+    try:
+        df = pd.read_csv(csv_path, encoding="utf-8-sig")
+        return dict(zip(df["school_name"], df["city"]))
+    except Exception:
+        return {}
+
+
+# 모듈 로드 시 캐시 1회 읽기 (build_school_city_map.py 실행 전엔 빈 dict)
+_NEIS_CACHE: dict[str, str] = load_neis_cache()
+
+
+def extract_sido(school_name: str, neis_cache: dict[str, str] | None = None) -> str:
+    """
+    학교명 → 시도 추출. 매핑 실패 시 '기타'.
+
+    우선순위:
+      1. SCHOOL_SIDO_KEYWORDS — 학교명 내 시도 키워드 포함 여부 (빠른 패턴)
+      2. NEIS 자동 매핑 캐시  — build_school_city_map.py 실행 결과
+      3. SCHOOL_CITY_MAP      — GPT 수동 매핑 (동명이교 주의 항목 포함)
+    """
     if not isinstance(school_name, str):
         return "기타"
     for keyword, city in SCHOOL_SIDO_KEYWORDS.items():
         if keyword in school_name:
             return city
+    cache = neis_cache if neis_cache is not None else _NEIS_CACHE
+    if school_name in cache:
+        return cache[school_name]
+    if school_name in SCHOOL_CITY_MAP:
+        return SCHOOL_CITY_MAP[school_name]
     return "기타"
