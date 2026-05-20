@@ -44,10 +44,22 @@ def run(limit: int | None = None, delay: float = 0.2) -> None:
         print(f"[ERROR] {UNMAPPED_PATH} 없음 — collect_school_meal.py를 먼저 실행하세요.")
         return
 
-    schools = UNMAPPED_PATH.read_text(encoding="utf-8").strip().splitlines()
-    # 첫 줄이 헤더이면 제거
-    if schools and schools[0].startswith("school_name"):
-        schools = schools[1:]
+    raw_lines = UNMAPPED_PATH.read_text(encoding="utf-8").strip().splitlines()
+    schools = []
+    for line in raw_lines:
+        line = line.strip()
+        if not line:
+            continue
+        # 헤더 줄 건너뜀 ("미매핑", "school_name" 등으로 시작)
+        if line.startswith("미매핑") or line.startswith("school_name"):
+            continue
+        # "학교명: N건" 형식 → 학교명만 추출
+        if ": " in line:
+            name = line.split(":")[0].strip()
+        else:
+            name = line
+        if name:
+            schools.append(name)
 
     already_cached = _load_existing_cache()
     schools = [s.strip() for s in schools if s.strip() and s.strip() not in already_cached]
@@ -78,7 +90,7 @@ def run(limit: int | None = None, delay: float = 0.2) -> None:
             unresolved_rows.append({"school_name": name})
 
         if i % 50 == 0 or i == total:
-            print(f"  {i}/{total} — 확정 {len(confirmed_rows)}, 동명이교 {len(ambiguous_rows)}, 미해결 {len(unresolved_rows)}")
+            print(f"  {i}/{total} / confirmed={len(confirmed_rows)}, ambiguous={len(ambiguous_rows)}, unresolved={len(unresolved_rows)}")
 
         time.sleep(delay)
 

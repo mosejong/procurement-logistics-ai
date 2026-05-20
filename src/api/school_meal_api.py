@@ -1,16 +1,20 @@
 """
-aT 농수산물사이버거래소 — 학교급식 낙찰/입찰 현황 API
+aT 농수산물사이버거래소 — 학교급식 낙찰/입찰 현황 API (전 연도)
 
 데이터 출처: 공공데이터포털 — 한국농수산식품유통공사
-    낙찰: https://api.odcloud.kr/api/15071800/v1/uddi:e1e17d54-39f7-421d-9f2b-b633ff59b8b3
-    입찰: https://api.odcloud.kr/api/15070124/v1/uddi:a11112e2-6450-43c7-9c85-ac65562ba2a5
+  namespace 15071800 (낙찰):
+    20220930: uddi:06dae997-b487-484d-8624-988579a2a7ec
+    20221231: uddi:2d236e67-b6b4-4c30-b7ed-83d026b9c6c8
+    20241231: uddi:e1e17d54-39f7-421d-9f2b-b633ff59b8b3  ← 최신
+  namespace 15070124 (입찰):
+    20190927: uddi:a7effded-b611-4b88-bcfd-e5d4465ca9f3
+    20201231: uddi:73e61c6c-a9f8-401f-a1e7-8e2529a1549a
+    20221231: uddi:58a5d474-79f5-471f-9f4f-b40162b7cca9
+    20231231: uddi:7ed7c61a-8f68-47b9-a2a4-8d18ae07b0e7
+    20241231: uddi:a11112e2-6450-43c7-9c85-ac65562ba2a5  ← 최신
 
 낙찰 컬럼: 개찰일시, 계약명, 계약방법명, 계약형태명, 공고번호, 구매사명, 등록일자, 전자입찰상태명
 입찰 컬럼: 계약방법명, 공고일자, 구매사명, 등록일자, 입찰명, 입찰시작일시, 전자입찰일련번호
-
-건수 (2024-12-31 기준):
-    낙찰: 165,461건
-    입찰:  83,963건
 
 한계: 시도(지역) 컬럼 없음 → 구매사명(학교명) 키워드로 지역 추출 필요
 """
@@ -22,8 +26,25 @@ from src.config.settings import PUBLIC_DATA_API_KEY
 
 BASE = "https://api.odcloud.kr/api"
 
-URL_AWARD = f"{BASE}/15071800/v1/uddi:e1e17d54-39f7-421d-9f2b-b633ff59b8b3"
-URL_BID   = f"{BASE}/15070124/v1/uddi:a11112e2-6450-43c7-9c85-ac65562ba2a5"
+# 낙찰 현황 — 연도별 스냅샷 (누적 데이터, 최신이 가장 많음)
+AWARD_URLS: dict[str, str] = {
+    "20220930": f"{BASE}/15071800/v1/uddi:06dae997-b487-484d-8624-988579a2a7ec",
+    "20221231": f"{BASE}/15071800/v1/uddi:2d236e67-b6b4-4c30-b7ed-83d026b9c6c8",
+    "20241231": f"{BASE}/15071800/v1/uddi:e1e17d54-39f7-421d-9f2b-b633ff59b8b3",
+}
+
+# 입찰 현황 — 연도별 스냅샷
+BID_URLS: dict[str, str] = {
+    "20190927": f"{BASE}/15070124/v1/uddi:a7effded-b611-4b88-bcfd-e5d4465ca9f3",
+    "20201231": f"{BASE}/15070124/v1/uddi:73e61c6c-a9f8-401f-a1e7-8e2529a1549a",
+    "20221231": f"{BASE}/15070124/v1/uddi:58a5d474-79f5-471f-9f4f-b40162b7cca9",
+    "20231231": f"{BASE}/15070124/v1/uddi:7ed7c61a-8f68-47b9-a2a4-8d18ae07b0e7",
+    "20241231": f"{BASE}/15070124/v1/uddi:a11112e2-6450-43c7-9c85-ac65562ba2a5",
+}
+
+# 하위 호환: 단일 URL 참조용 (최신 스냅샷)
+URL_AWARD = AWARD_URLS["20241231"]
+URL_BID   = BID_URLS["20241231"]
 
 # 학교명 → 시도 키워드 매핑 (학교명에 포함된 지역 힌트)
 SCHOOL_SIDO_KEYWORDS: dict[str, str] = {
