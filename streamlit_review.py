@@ -344,6 +344,16 @@ matrix_all = load_csv(MATRIX_PATH)
 top_items_all = load_csv(TOP_ITEMS_PATH)
 features_all = load_csv(FEATURE_PATH)
 competition = load_csv(COMPETITION_PATH)
+
+# aT 학교급식 city별 입찰 건수 (급식/식자재 AI 컨텍스트 주입용)
+_at_meal_path = TABLES_DIR / "school_meal_bid_summary.csv"
+_at_meal_by_city: dict[str, int] = {}
+if _at_meal_path.exists():
+    try:
+        _at_df = pd.read_csv(_at_meal_path, encoding="utf-8-sig")
+        _at_meal_by_city = dict(zip(_at_df["city"], _at_df["bid_count"].astype(int)))
+    except Exception:
+        pass
 _is_national_comp = "city" in competition.columns and not competition.empty
 consumer_fit = load_csv(CONSUMER_FIT_PATH)
 classified_all = load_csv(CLASSIFIED_PATH)
@@ -2049,6 +2059,7 @@ with tab_region:
                                 except (TypeError, ValueError):
                                     pass
 
+                            _is_food_cat = "급식" in row.item_category or "식자재" in row.item_category
                             ctx = DemandContext(
                                 city=_city_for_district,
                                 district=selected,
@@ -2060,6 +2071,7 @@ with tab_region:
                                 consumer_fit_score=fit_score,
                                 stores_per_10k=None,
                                 competition_score=comp_score,
+                                at_food_count=_at_meal_by_city.get(_city_for_district) if _is_food_cat else None,
                             )
                             st.session_state["gemini_cache"][cache_key] = build_demand_summary(ctx)
 
@@ -2265,36 +2277,9 @@ with tab_compare:
 
         compare_df = pd.DataFrame(rows).sort_values(f"{dist_a} 점수", ascending=False)
 
-        # ── aT 급식 실수요 배너 (급식/식자재 카테고리가 있을 때만) ──────────
-        _food_cats = {"급식/식자재", "급식/식품"}
-        _has_food_a = bool(_food_cats & set(data_a.index)) if not data_a.empty else False
-        _has_food_b = bool(_food_cats & set(data_b.index)) if not data_b.empty else False
-        if _has_food_a or _has_food_b:
-            _at_bid_path = TABLES_DIR / "school_meal_bid_summary.csv"
-            if _at_bid_path.exists():
-                _at_bid = pd.read_csv(_at_bid_path, encoding="utf-8-sig")
-                def _at_count(city):
-                    row = _at_bid[_at_bid["city"] == city]
-                    return int(row["bid_count"].iloc[0]) if not row.empty else 0
-
-                _at_a = _at_count(city_a) if city_a else 0
-                _at_b = _at_count(city_b) if city_b else 0
-                _nara_a = int(data_a.loc[data_a.index.intersection(_food_cats), "bid_count"].sum()) if not data_a.empty else 0
-                _nara_b = int(data_b.loc[data_b.index.intersection(_food_cats), "bid_count"].sum()) if not data_b.empty else 0
-
-                st.info(
-                    f"**급식·식자재 실수요 보완 데이터 (aT 학교급식)**  \n"
-                    f"나라장터만으로는 급식 공공수요의 일부만 포착됩니다. "
-                    f"aT 학교급식 입찰 데이터로 실제 수요 규모를 확인하세요.  \n"
-                    f"| | 나라장터 공고 | aT 급식 입찰 | 배율 |\n"
-                    f"|---|---|---|---|\n"
-                    f"| {dist_a} ({CITY_LABELS.get(city_a, city_a)}) | {_nara_a:,}건 | {_at_a:,}건 | "
-                    + (f"**{_at_a//_nara_a:,}배**" if _nara_a > 0 else "∞") +
-                    f" |\n"
-                    f"| {dist_b} ({CITY_LABELS.get(city_b, city_b)}) | {_nara_b:,}건 | {_at_b:,}건 | "
-                    + (f"**{_at_b//_nara_b:,}배**" if _nara_b > 0 else "∞") +
-                    " |"
-                )
+        # aT 급식 데이터 (전역 dict에서 조회 — AI 컨텍스트 주입용)
+        _at_food_a = _at_meal_by_city.get(city_a) if city_a else None
+        _at_food_b = _at_meal_by_city.get(city_b) if city_b else None
 
         # 품목군별 공고 비율 파이차트 (위)
         st.subheader("품목군별 공고 비율")
@@ -2353,6 +2338,7 @@ with tab_compare:
                         city_a=city_a_label, city_b=city_b_label,
                         items_a=_items_a, items_b=_items_b,
                         dominant_a=_dom_a, dominant_b=_dom_b,
+                        at_food_a=_at_food_a, at_food_b=_at_food_b,
                     )
                     if "gemini_cache" not in st.session_state:
                         st.session_state["gemini_cache"] = {}

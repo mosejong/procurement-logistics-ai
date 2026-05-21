@@ -105,7 +105,7 @@ _USER_TEMPLATE = """다음은 {city} {district}의 공공조달 수요 데이터
 - 공공수요 점수: {opportunity_score:.1f}점 (100점 만점, 공고수40%·금액25%·최근성15%·경쟁도20% 가중합)
 - 소비층 적합도: {consumer_fit_str}  [출처: 행정안전부 연령별 인구]
 - 시장 개방도: {competition_str}  [출처: 나라장터 입찰방식]
-{stores_line}{confidence_line}{plan_line}{shop_line}
+{stores_line}{confidence_line}{at_food_line}{plan_line}{shop_line}
 위 데이터를 바탕으로 이 품목군의 공공조달 수요 특성을 설명해주세요.
 창업 성공 여부가 아닌, 공공기관의 발주 패턴과 수요 규모 관점에서 서술하세요.
 제공된 수치만 인용하고, 수치에 없는 내용은 추측하지 마세요."""
@@ -128,6 +128,7 @@ class DemandContext:
     plan_amount: float | None = None       # 향후 발주계획 금액합계
     shopping_count: int | None = None      # 최근 종합쇼핑몰 납품요구 건수
     shopping_amount: float | None = None   # 최근 종합쇼핑몰 납품요구 금액합계
+    at_food_count: int | None = None       # aT 학교급식 입찰 건수 (city 단위, 급식 품목 전용)
 
 
 def _format_amount(amount: float) -> str:
@@ -180,6 +181,12 @@ def build_demand_summary(ctx: DemandContext) -> str:
             if ctx.demand_confidence_score is not None
             else ""
         )
+        at_food_line = (
+            f"- aT 학교급식 입찰 실수요 ({ctx.city} 전체): {ctx.at_food_count:,}건"
+            f" (나라장터 공고 {ctx.bid_count}건의 {ctx.at_food_count // max(ctx.bid_count, 1):,}배 규모)\n"
+            if ctx.at_food_count is not None and ("급식" in ctx.item_category or "식자재" in ctx.item_category)
+            else ""
+        )
 
         # 발주계획 — ctx에 직접 세팅된 값 우선, 없으면 CSV 자동 조회
         plan_cnt = ctx.plan_count
@@ -218,6 +225,7 @@ def build_demand_summary(ctx: DemandContext) -> str:
             competition_str=competition_str,
             stores_line=stores_line,
             confidence_line=confidence_line,
+            at_food_line=at_food_line,
             plan_line=plan_line,
             shop_line=shop_line,
         )
@@ -743,7 +751,7 @@ _COMPARE_TEMPLATE = """두 지역의 공공조달 수요 포트폴리오 비교�
 
 A 지역이 우세한 품목군: {dominant_a}
 B 지역이 우세한 품목군: {dominant_b}
-
+{at_section}
 위 데이터를 바탕으로 두 지역의 공공조달 수요 구조 차이를 설명해주세요.
 어떤 지역이 어떤 품목군에 수요가 집중되어 있는지, 두 지역의 포트폴리오 특성 차이를 중심으로 서술하세요."""
 
@@ -758,6 +766,8 @@ class CompareContext:
     items_b: list[dict]
     dominant_a: list[str]  # A가 우세한 품목군
     dominant_b: list[str]  # B가 우세한 품목군
+    at_food_a: int | None = None  # aT 학교급식 입찰 건수 (city 단위)
+    at_food_b: int | None = None
 
 
 def build_compare_summary(ctx: CompareContext) -> str:
@@ -775,6 +785,23 @@ def build_compare_summary(ctx: CompareContext) -> str:
     label_a = f"{ctx.city_a} {ctx.dist_a}" if ctx.city_a else ctx.dist_a
     label_b = f"{ctx.city_b} {ctx.dist_b}" if ctx.city_b else ctx.dist_b
 
+    # 급식 관련 품목이 있을 때만 aT 보완 데이터 주입
+    _food_items_a = {d["item"] for d in ctx.items_a if "급식" in d["item"] or "식자재" in d["item"]}
+    _food_items_b = {d["item"] for d in ctx.items_b if "급식" in d["item"] or "식자재" in d["item"]}
+    if (_food_items_a or _food_items_b) and (ctx.at_food_a is not None or ctx.at_food_b is not None):
+        _at_a_str = f"{ctx.at_food_a:,}건" if ctx.at_food_a is not None else "미집계"
+        _at_b_str = f"{ctx.at_food_b:,}건" if ctx.at_food_b is not None else "미집계"
+        _nara_a = next((d["bid_count"] for d in ctx.items_a if "급식" in d["item"] or "식자재" in d["item"]), 0)
+        _nara_b = next((d["bid_count"] for d in ctx.items_b if "급식" in d["item"] or "식자재" in d["item"]), 0)
+        at_section = (
+            f"\n[급식·식자재 aT 학교급식 실수요 보완 데이터]\n"
+            f"- {label_a}: 나라장터 {_nara_a}건 / aT 학교급식 {_at_a_str}\n"
+            f"- {label_b}: 나라장터 {_nara_b}건 / aT 학교급식 {_at_b_str}\n"
+            f"(나라장터 공고는 급식 실수요의 극히 일부만 반영합니다. aT 데이터가 실제 시장 규모에 더 가깝습니다.)\n"
+        )
+    else:
+        at_section = ""
+
     prompt = _COMPARE_TEMPLATE.format(
         label_a=label_a,
         label_b=label_b,
@@ -782,6 +809,7 @@ def build_compare_summary(ctx: CompareContext) -> str:
         items_b=_fmt_items(ctx.items_b),
         dominant_a=", ".join(ctx.dominant_a[:4]) or "없음",
         dominant_b=", ".join(ctx.dominant_b[:4]) or "없음",
+        at_section=at_section,
     )
 
     try:
