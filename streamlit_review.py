@@ -1565,9 +1565,9 @@ with tab_overview:
         _ov_cat = _meta.get("item_categories") or (matrix_all["item_category"].nunique() if not matrix_all.empty and "item_category" in matrix_all.columns else 0)
         st.metric("품목군", f"{_ov_cat}종")
     with _ov_c5:
-        st.metric("연계 API", f"{_meta.get('api_sources', 4)}개 기관")
+        st.metric("연계 API", f"{_meta.get('api_sources', 8)}개 데이터소스")
 
-    st.caption(f"조달청 {_ov_total:,}건 (수집 기간: {TREND_START_YM} ~ ) · 행안부 인구 · 소상공인 상권정보 · KOSIS 신생기업 생존율")
+    st.caption(f"조달청 {_ov_total:,}건 (수집 기간: {TREND_START_YM} ~ ) · aT 학교급식 73만건 · 행안부 인구 · 소상공인 상권정보 · 국토부 물류창고 · KOSIS 생존율")
 
     st.markdown("---")
 
@@ -1576,12 +1576,26 @@ with tab_overview:
     st.code(
         f"""
 조달청 입찰공고 API (전국 {_ov_city}개 시/도, {_ov_total:,}건)
-  → 공고명 분류 (item_category_detail, {_ov_cat}종)
+  → 공고명 분류 (item_category, {_ov_cat}종)
       1단계: 키워드 규칙 매칭
       2단계: TF-IDF + Logistic Regression ML 분류기 (정확도 98.6%)
       3단계: confidence 미달 → 기타/미분류
   → opportunity_score = 공고수({int(W_CNT*100)}%) + 금액({int(W_AMT*100)}%) + 최근성({int(W_REC*100)}%) + 경쟁도({int(W_COMP*100)}%)
+  → competition_score = 품목군 내 공고수 역백분위 (높을수록 기존 납품사 적음)
   → bids_per_10k_population (인구 보정)
+
+조달청 계약정보 API (38,367건)
+  → demand_confidence_score = 공고(의사 0.5) + 낙찰건수(실측 0.3) + 낙찰금액(0.2)
+  → "공고=의사 / 계약=실측" 2단 수요 검증 구조
+
+조달청 발주계획 + 종합쇼핑몰 MAS API
+  → 향후 6개월 발주계획 445건 (1,249.8억원)
+  → MAS 다수공급자계약 품목 5,000건 (8개 품목군)
+  → Gemini AI 해석 프롬프트에 자동 주입
+
+aT 학교급식 입찰·낙찰 API
+  → 입찰 285,552건 + 낙찰 448,690건 (나라장터 급식 공고의 1,560배)
+  → demand_confidence_score 실측 근거
 
 행안부 연령별 인구 API
   → consumer_fit_score (242개 지역, 품목 주소비층 연령 비중)
@@ -1589,12 +1603,15 @@ with tab_overview:
 소상공인 상권정보 API
   → stores_per_10k (253개 지역, 10개 업종 경쟁 포화도)
 
+국토부 물류창고 등록정보
+  → logistics_infra_score (전국 5,911개소)
+
 KOSIS 신생기업 생존율 API
   → adjusted_score = opportunity_score × (survival_5y/100) × (1 − dissolution_rate)
 
-Gemini AI (gemini-3.1-flash-lite) — 판정 4종
+Gemini AI (gemini-3.1-flash-lite) — 해석 5종
   ① 수요 설명   ② 수요 공백(블루오션/저수요)
-  ③ 경쟁 구조   ④ 물류 거점 전략
+  ③ 경쟁 구조   ④ 물류 거점 전략   ⑤ 지역 비교
         """,
         language="text",
     )
@@ -1609,7 +1626,8 @@ Gemini AI (gemini-3.1-flash-lite) — 판정 4종
 |---|---|---|
 | `opportunity_score` | 공고수(40%) + 금액(25%) + 최근성(15%) + 경쟁도(20%) | 지역·품목 공공수요 종합 매력도 |
 | `adjusted_score` | opportunity_score × 생존율 × (1 − 소멸률) | KOSIS 신생기업 통계 보정 점수 |
-| `competition_score` | 개방입찰 비율 = 1 − 지명경쟁(dsgntCmptYn=Y) 비율 | 신규 진입 용이성 |
+| `competition_score` | 품목군 내 공고수 역백분위 = 1 − rank(pct=True) | 신규 진입 용이성 (높을수록 기존 납품사 적음) |
+| `demand_confidence_score` | 공고(의사 0.5) + 낙찰건수(실측 0.3) + 낙찰금액(0.2) | 공고→계약 2단 수요 신뢰도 (0~1) |
 | `bids_per_10k_population` | 공고수 ÷ (인구/10,000) | 인구 규모 편향 보정 수요 밀도 |
 | `consumer_fit_score` | 주소비층 연령 비중 min-max 정규화 | 인구 구성 기반 소비층 적합도 (0~1) |
 | `stores_per_10k` | 점포수 ÷ (인구/10,000) | 업종별 경쟁 포화도 |
@@ -3037,6 +3055,52 @@ with tab_raw:
             file_name=f"procurement_data_{_raw_city_sel}.csv",
             mime="text/csv",
         )
+
+    # ── 보조 데이터소스 현황 ──────────────────────────────────────────────────
+    st.markdown("---")
+    st.subheader("보조 데이터소스 현황")
+    _aux1, _aux2, _aux3 = st.columns(3)
+
+    # aT 학교급식
+    _at_bid_path = TABLES_DIR / "school_meal_bid_summary.csv"
+    _at_award_path = TABLES_DIR / "school_meal_award_summary.csv"
+    with _aux1:
+        st.markdown("**aT 학교급식 (입찰·낙찰)**")
+        if _at_bid_path.exists() and _at_award_path.exists():
+            _at_bid = pd.read_csv(_at_bid_path)
+            _at_award = pd.read_csv(_at_award_path)
+            st.metric("입찰 수집", f"{int(_at_bid['bid_count'].sum()):,}건")
+            st.metric("낙찰(실측) 수집", f"{int(_at_award['award_count'].sum()):,}건")
+            st.caption("나라장터 급식 공고의 1,560배 — 의사→실측 검증")
+        else:
+            st.info("미수집")
+
+    # 발주계획
+    _plan_path = TABLES_DIR / "procurement_plan_summary.csv"
+    with _aux2:
+        st.markdown("**발주계획 (향후 6개월)**")
+        if _plan_path.exists():
+            _plan = pd.read_csv(_plan_path)
+            total_plan = int(_plan["plan_count"].sum())
+            total_amt = _plan["plan_amount_sum"].sum()
+            st.metric("발주 예정", f"{total_plan:,}건")
+            st.metric("예정 금액", f"{total_amt/1e8:.0f}억원")
+            st.caption("Gemini AI 해석 컨텍스트 자동 주입")
+        else:
+            st.info("미수집 — python -m src.collect.collect_plan_data")
+
+    # MAS 품목
+    _shop_path = TABLES_DIR / "shopping_mall_summary.csv"
+    with _aux3:
+        st.markdown("**종합쇼핑몰 MAS 품목**")
+        if _shop_path.exists():
+            _shop = pd.read_csv(_shop_path)
+            total_shop = int(_shop["shopping_count"].sum())
+            st.metric("등록 품목", f"{total_shop:,}건")
+            st.metric("품목군", f"{len(_shop)}개")
+            st.caption("다수공급자계약 단가 시장 규모")
+        else:
+            st.info("미수집 — python -m src.collect.collect_plan_data")
 
     if REPORT_PATH.exists():
         with st.expander("자동 생성 요약 리포트"):
