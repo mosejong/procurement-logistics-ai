@@ -2983,7 +2983,7 @@ with tab_raw:
         # ── 데이터 품질 지표 ──────────────────────────────────────────────────
         st.subheader("데이터 품질")
         _rq1, _rq2, _rq3, _rq4, _rq5 = st.columns(5)
-        _total_all = len(cleaned)
+        _total_all = _meta.get("total_bids") or len(cleaned)
         _total_sel = len(_raw_view)
         _cat_col = "item_category" if "item_category" in cleaned.columns else None
         _etc_cnt = (_raw_view[_cat_col] == "기타/미분류").sum() if _cat_col else 0
