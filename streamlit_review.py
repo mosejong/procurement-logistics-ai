@@ -736,6 +736,27 @@ with tab_map:
                         "hub_score": "물류점수", "district_count": "지역수",
                     },
                 )
+                # 0건 시/도 회색 처리 — 데이터 없는 지역과 실제 0건 구분
+                _all_sido = {
+                    f.get("properties", {}).get("name", "")
+                    for f in geojson.get("features", [])
+                    if f.get("properties", {}).get("name")
+                } if geojson else set()
+                _data_sido = set(_map_df["city"].tolist()) if not _map_df.empty else set()
+                _zero_sido = sorted(_all_sido - _data_sido)
+                if _zero_sido:
+                    fig.add_trace(go.Choropleth(
+                        geojson=geojson,
+                        locations=_zero_sido,
+                        featureidkey="properties.name",
+                        z=[0] * len(_zero_sido),
+                        colorscale=[[0, "#cccccc"], [1, "#cccccc"]],
+                        showscale=False,
+                        marker_line_color="white",
+                        marker_line_width=0.5,
+                        hovertemplate="<b>%{location}</b><br>해당 품목 공고 없음<extra></extra>",
+                        name="공고 없음",
+                    ))
                 fig.update_geos(
                     visible=False, showframe=False,
                     lataxis={"range": [32.8, 38.9]},
@@ -816,6 +837,10 @@ with tab_map:
                     else:
                         _dist_matched = _dist_df.copy()
 
+                    # 데이터 없는 지역(0건)은 GeoJSON에는 있지만 _dist_matched에는 없음
+                    _matched_geo_names = set(_dist_matched["district"].tolist()) if not _dist_matched.empty else set()
+                    _zero_geo_names = sorted(_geo_names - _matched_geo_names)
+
                     fig_d = px.choropleth(
                         _dist_matched,
                         geojson=_sg_geo,
@@ -837,6 +862,20 @@ with tab_map:
                             "bid_count": True,
                         },
                     )
+                    # 0건 지역 회색 trace 추가 (데이터 없음을 명시)
+                    if _zero_geo_names:
+                        fig_d.add_trace(go.Choropleth(
+                            geojson=_sg_geo,
+                            locations=_zero_geo_names,
+                            featureidkey="properties.name",
+                            z=[0] * len(_zero_geo_names),
+                            colorscale=[[0, "#cccccc"], [1, "#cccccc"]],
+                            showscale=False,
+                            marker_line_color="white",
+                            marker_line_width=0.5,
+                            hovertemplate="<b>%{location}</b><br>해당 품목 공고 없음<extra></extra>",
+                            name="공고 없음",
+                        ))
                     # 시도별 명시 좌표 범위 (fitbounds 단독으로 zoom 안 되는 경우 보완)
                     _SIDO_BOUNDS: dict[str, tuple] = {
                         "서울특별시":    (126.75, 127.20, 37.42, 37.70),
