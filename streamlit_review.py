@@ -2984,10 +2984,11 @@ with tab_raw:
         st.subheader("데이터 품질")
         _rq1, _rq2, _rq3, _rq4, _rq5 = st.columns(5)
         _total_all = _meta.get("total_bids") or len(cleaned)
-        _total_sel = len(_raw_view)
+        _no_filter = (_raw_city_sel == "전체" and not dist_filter)
+        _total_sel = _total_all if _no_filter else len(_raw_view)
         _cat_col = "item_category" if "item_category" in cleaned.columns else None
         _etc_cnt = (_raw_view[_cat_col] == "기타/미분류").sum() if _cat_col else 0
-        _etc_rate = _etc_cnt / _total_sel * 100 if _total_sel > 0 else 0
+        _etc_rate = _etc_cnt / len(_raw_view) * 100 if len(_raw_view) > 0 else 0
         _classified_rate = 100 - _etc_rate
         with _rq1:
             st.metric("전체 공고", f"{_total_all:,}건")
