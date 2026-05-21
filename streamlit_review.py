@@ -1565,7 +1565,7 @@ with tab_overview:
         _ov_cat = _meta.get("item_categories") or (matrix_all["item_category"].nunique() if not matrix_all.empty and "item_category" in matrix_all.columns else 0)
         st.metric("품목군", f"{_ov_cat}종")
     with _ov_c5:
-        st.metric("연계 API", f"{_meta.get('api_sources', 8)}개 데이터소스")
+        st.metric("연계 API", f"6개 기관 · {_meta.get('api_sources', 9)}개 데이터소스")
 
     st.caption(f"조달청 {_ov_total:,}건 (수집 기간: {TREND_START_YM} ~ ) · aT 학교급식 73만건 · 행안부 인구 · 소상공인 상권정보 · 국토부 물류창고 · KOSIS 생존율")
 
