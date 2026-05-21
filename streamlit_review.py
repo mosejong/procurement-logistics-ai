@@ -34,6 +34,7 @@ TOP_ITEMS_PATH = _find_table("top_items_by_district_national.csv", "seoul_top_it
 FEATURE_PATH = TABLES_DIR / "feature_table_national.csv"
 COMPETITION_PATH = _find_table("national_competition_matrix.csv", "seoul_competition_matrix.csv")
 CONSUMER_FIT_PATH = _find_table("national_consumer_fit.csv", "seoul_consumer_fit.csv")
+WAREHOUSE_SUMMARY_PATH = TABLES_DIR / "logistics_warehouse_summary.csv"
 MONTHLY_TREND_PATH = TABLES_DIR / "monthly_trend_national.csv"
 CLASSIFIED_PATH = PROCESSED_DIR / "bid_classified_national.csv"
 if not CLASSIFIED_PATH.exists():
@@ -73,9 +74,10 @@ W_COMP = 0.20   # 경쟁도 점수 가중치
 # ── 복합 점수 가중치 ─────────────────────────────────────────────────────────
 W_OPP   = 0.6   # 기회점수 가중치 (복합 추천점수)
 W_FIT   = 0.4   # 소비층 적합도 가중치 (복합 추천점수)
-W_HUB_BIDS = 0.50  # 물류 거점: 공고수
-W_HUB_AMT  = 0.30  # 물류 거점: 금액
-W_HUB_CAT  = 0.20  # 물류 거점: 품목 다양성
+W_HUB_BIDS = 0.40  # 물류 거점: 공고수
+W_HUB_AMT  = 0.25  # 물류 거점: 금액
+W_HUB_CAT  = 0.15  # 물류 거점: 품목 다양성
+W_HUB_INFRA = 0.20  # 물류 거점: 국토부 물류창고 인프라
 
 # ── UI 표시 상수 ─────────────────────────────────────────────────────────────
 TOP_N_HUB       = 8    # 물류 거점 Top N
@@ -356,6 +358,19 @@ if _at_meal_path.exists():
         pass
 _is_national_comp = "city" in competition.columns and not competition.empty
 consumer_fit = load_csv(CONSUMER_FIT_PATH)
+
+# 국토부 물류창고 인프라 점수 (시도 단위)
+_warehouse_infra: dict[str, float] = {}
+if WAREHOUSE_SUMMARY_PATH.exists():
+    try:
+        _wdf = pd.read_csv(WAREHOUSE_SUMMARY_PATH, encoding="utf-8-sig")
+        _w_max = float(_wdf["logistics_infra_score"].max()) or 1.0
+        _warehouse_infra = dict(zip(
+            _wdf["city"],
+            (_wdf["logistics_infra_score"] / _w_max * 100).round(1),
+        ))
+    except Exception:
+        pass
 classified_all = load_csv(CLASSIFIED_PATH)
 cleaned_all = load_csv(CLEANED_PATH)
 
@@ -2894,13 +2909,20 @@ with tab_logistics:
                 .reset_index()
             )
 
-            # 허브 점수: 물리적 공고수(50%) + 금액(30%) + 품목 다양성(20%)
+            # 허브 점수: 공고수(40%) + 금액(25%) + 품목 다양성(15%) + 국토부 물류창고 인프라(20%)
             from src.features.build_opportunity_matrix import min_max_score
             _city_agg["_bids_score"] = min_max_score(_city_agg["physical_bids"])
             _city_agg["_amt_score"] = min_max_score(_city_agg["physical_amount"])
             _city_agg["_cat_score"] = min_max_score(_city_agg["category_count"])
+            _group_col = "district" if _drill_district else "city"
+            _city_agg["_infra_score"] = (
+                _city_agg[_group_col].map(_warehouse_infra).fillna(0.0) / 100.0
+            )
             _city_agg["hub_score"] = (
-                (_city_agg["_bids_score"] * W_HUB_BIDS + _city_agg["_amt_score"] * W_HUB_AMT + _city_agg["_cat_score"] * W_HUB_CAT) * 100
+                (_city_agg["_bids_score"] * W_HUB_BIDS
+                 + _city_agg["_amt_score"] * W_HUB_AMT
+                 + _city_agg["_cat_score"] * W_HUB_CAT
+                 + _city_agg["_infra_score"] * W_HUB_INFRA) * 100
             ).round(1)
 
             if _drill_district:
