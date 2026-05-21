@@ -64,9 +64,14 @@ def build() -> None:
     if not MATRIX_PATH.exists():
         raise FileNotFoundError(f"매트릭스 파일 없음: {MATRIX_PATH}")
 
+    from src.config.category_map import MATRIX_TO_DISPLAY
+
     matrix = pd.read_csv(MATRIX_PATH, encoding="utf-8-sig")
 
-    # ── 1. 품목군 × 시도 집계 ────────────────────────────────────────────────
+    # ── 0. 카테고리명 통합 (matrix taxonomy → display taxonomy) ─────────────
+    matrix["item_category"] = matrix["item_category"].map(MATRIX_TO_DISPLAY).fillna(matrix["item_category"])
+
+    # ── 1. 품목군 × 시도 집계 (rename 후 merged 카테고리 재집계) ────────────
     agg_spec: dict[str, tuple] = {}
     for col, func in [
         ("opportunity_score", "mean"),

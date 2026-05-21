@@ -94,7 +94,8 @@ _SYSTEM_INSTRUCTION = """당신은 공공조달 입찰공고 데이터를 분석
 - 수치가 낮으면 낮다고, 경쟁이 많으면 많다고 사실대로 기술
 - 수치는 반드시 제공된 숫자를 그대로 인용 (임의 생성 금지)
 - 2~3문장, 한국어
-- 마지막 문장: "이 수치는 공공조달 참고 지표이며 창업 성공을 보장하지 않습니다." 필수"""
+- 마지막 문장: "이 수치는 공공조달 참고 지표이며 창업 성공을 보장하지 않습니다." 필수
+- 본문 마지막에 빈 줄 하나를 두고 반드시: **한 줄 요약:** [판정 결론을 한 문장으로]"""
 
 _USER_TEMPLATE = """다음은 {city} {district}의 공공조달 수요 데이터입니다.
 
@@ -269,7 +270,8 @@ _SHORTAGE_SYSTEM = """당신은 공공조달 입찰공고 데이터 패턴을 �
 - 판정 결과를 첫 문장에 명확히 제시 (블루오션 가능성 높음 / 저수요 가능성 높음 / 판단 어려움)
 - 판정 근거는 반드시 제공된 수치를 인용
 - 창업 성공 보장 표현 금지
-- 3~5문장, 한국어"""
+- 3~5문장, 한국어
+- 본문 마지막에 빈 줄 하나를 두고 반드시: **한 줄 요약:** [판정 결론을 한 문장으로]"""
 
 _SHORTAGE_TEMPLATE = """{city} {district}({district_profile})의 데이터부족 품목 진단
 
@@ -363,7 +365,8 @@ _OVERDEMAND_SYSTEM = """당신은 공공조달 시장 경쟁 구조를 분석하
 - competition_score와 bid_count를 반드시 수치로 인용
 - 진입 주의: 기존 납품사 점유 / 규모 격차 / 장벽 등 구체 근거 명시
 - 조건부: 어떤 조건에서만 가능한지 한정적으로 기술
-- 4~6문장, 한국어"""
+- 4~6문장, 한국어
+- 본문 마지막에 빈 줄 하나를 두고 반드시: **한 줄 요약:** [판정 결론을 한 문장으로]"""
 
 _OVERDEMAND_TEMPLATE = """{city} {district}({district_profile}) 고수요 품목 진입 가능성 진단
 
@@ -453,6 +456,134 @@ def _overdemand_fallback(ctx: OverdemandContext, error: str = "") -> str:
 
 
 @dataclass
+class UnifiedVerdictContext:
+    city: str
+    district: str
+    district_profile: str
+    shortage_items: list[str]            # 공고 10건 미만 품목
+    hot_items: list[dict]                # [{item, bid_count, opportunity_score, competition_score}]
+    shortage_comparison: list[dict]      # 같은 시도 비교: [{item, avg_count, districts_with_data, total_districts}]
+    city_avg_bid_count: float
+    baseline_signal: str                 # "🟢" / "🟡" / "🔴" — Python 선계산값
+
+
+_UNIFIED_SYSTEM = """당신은 공공조달 시장 진입 가능성을 종합 판단하는 분석가입니다.
+수치를 직접 인용하고, 수요와 경쟁 두 관점을 모두 반영해 단일 결론을 냅니다.
+
+반드시 지켜야 할 규칙:
+- 첫 줄: baseline_signal로 시작 (예: 🟡 조건부 검토)
+- 수요 신호(공고 건수·데이터부족 현황)와 경쟁 신호(competition_score)를 각각 한 문장씩 인용
+- 두 신호가 엇갈릴 때는 그 이유와 실제 진입 권고를 명시
+- 창업 성공 보장 표현 금지 / 4~6문장 / 한국어
+- 본문 마지막에 빈 줄 하나를 두고 반드시 다음 형식으로 마무리: **한 줄 요약:** [판정 결론을 한 문장으로]"""
+
+_UNIFIED_TEMPLATE = """{city} {district}({district_profile}) 진입 가능성 종합 판정
+
+종합 신호: {baseline_signal}
+
+수요 신호:
+- 데이터부족 품목({n_shortage}개): {shortage_list}
+- 수요 집중 품목: {hot_list}
+- {city} 내 비교: {comparison_lines}
+
+경쟁 신호:
+{competition_lines}
+(competition_score: 높을수록 기존 납품사 적음, 0.6+ → 진입 여지 / 0.4 미만 → 기존 납품사 독점)
+
+위 두 신호를 종합해 {baseline_signal} 판정 근거를 서술하고, 진입 시 주의사항 또는 추천 접근법을 제시하세요."""
+
+
+def _unified_baseline(shortage_items: list[str], hot_items: list[dict]) -> str:
+    """Python에서 🟢/🟡/🔴 선계산 — AI에 전달하는 앵커값"""
+    if not hot_items and not shortage_items:
+        return "🟡"
+    comp_scores = [h["competition_score"] for h in hot_items if "competition_score" in h]
+    avg_comp = sum(comp_scores) / len(comp_scores) if comp_scores else 0.5
+    has_shortage = len(shortage_items) > 0
+    if avg_comp >= 0.4 and not has_shortage:
+        return "🟢"
+    if avg_comp < 0.2 and not has_shortage:
+        return "🔴"
+    return "🟡"
+
+
+def build_unified_verdict(ctx: UnifiedVerdictContext) -> str:
+    """수요 신호 + 경쟁 신호 통합 종합 판정"""
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    if not api_key:
+        return _unified_fallback(ctx)
+
+    try:
+        from google import genai
+        from google.genai import types
+        import time
+
+        comparison_lines = " / ".join(
+            f"{c['item']} 시도평균 {c['avg_count']:.0f}건"
+            for c in ctx.shortage_comparison[:4]
+        ) or "비교 데이터 없음"
+
+        competition_lines = "\n".join(
+            f"- {h['item']}: 공고 {h['bid_count']}건, 진입용이도 {h['competition_score']*100:.0f}%"
+            for h in ctx.hot_items
+        ) or "- 수요 집중 품목 없음"
+
+        prompt = _UNIFIED_TEMPLATE.format(
+            city=ctx.city,
+            district=ctx.district,
+            district_profile=ctx.district_profile,
+            baseline_signal=ctx.baseline_signal,
+            n_shortage=len(ctx.shortage_items),
+            shortage_list=", ".join(ctx.shortage_items) or "없음",
+            hot_list=", ".join(h["item"] for h in ctx.hot_items) or "없음",
+            comparison_lines=comparison_lines,
+            competition_lines=competition_lines,
+        )
+
+        client = genai.Client(api_key=api_key)
+        for attempt in range(3):
+            try:
+                response = client.models.generate_content(
+                    model="gemini-3.1-flash-lite",
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=_UNIFIED_SYSTEM,
+                        max_output_tokens=450,
+                        temperature=0.2,
+                    ),
+                )
+                text = "".join(
+                    part.text for part in response.candidates[0].content.parts
+                    if hasattr(part, "text") and part.text
+                )
+                if text.strip():
+                    return text.strip()
+            except Exception as e:
+                if "503" in str(e) and attempt < 2:
+                    time.sleep(2 * (attempt + 1))
+                    continue
+                return _unified_fallback(ctx, error=str(e))
+
+    except Exception as e:
+        return _unified_fallback(ctx, error=str(e))
+
+    return _unified_fallback(ctx)
+
+
+def _unified_fallback(ctx: UnifiedVerdictContext, error: str = "") -> str:
+    lines = [f"**{ctx.district} 진입 가능성 종합 판정**", f"종합 신호: {ctx.baseline_signal}", ""]
+    if ctx.shortage_items:
+        lines.append(f"- 데이터부족 품목 {len(ctx.shortage_items)}개: {', '.join(ctx.shortage_items)}")
+    for h in ctx.hot_items:
+        comp = h["competition_score"]
+        verdict = "🟢 진입 여지" if comp >= 0.6 else ("🔴 진입 주의" if comp < 0.2 else "🟡 조건부")
+        lines.append(f"- **{h['item']}**: 공고 {h['bid_count']}건, 진입용이도 {comp*100:.0f}% → {verdict}")
+    if error:
+        lines.append(f"_(AI 해석 실패: {error[:60]})_")
+    return "\n".join(lines)
+
+
+@dataclass
 class HubStrategyContext:
     hub_candidates: list[dict]   # [{city, zone, physical_bids, physical_amount, top_categories, hub_score}]
     national_total_bids: int
@@ -467,7 +598,8 @@ _HUB_SYSTEM = """당신은 공공조달 물류 네트워크 전략가입니다.
 - 각 거점 선정 근거를 수치로 명시
 - 어떤 품목 흐름이 해당 거점을 정당화하는지 설명
 - 물류 실무자가 바로 활용할 수 있는 수준으로 구체적으로
-- 5~8문장, 한국어"""
+- 5~8문장, 한국어
+- 본문 마지막에 빈 줄 하나를 두고 반드시: **한 줄 요약:** [핵심 거점 전략을 한 문장으로]"""
 
 _HUB_TEMPLATE = """전국 공공조달 물리적 납품 수요 데이터 기반 물류 거점 전략 분석
 
@@ -598,7 +730,8 @@ _COMPARE_SYSTEM = """당신은 공공조달 입찰공고 데이터를 분석하�
 - "유망합니다", "추천합니다" 같은 판단형 표현 금지
 - 두 지역의 수요 구조 차이를 수치 중심으로 설명
 - 4~6문장, 한국어로 간결하게
-- 어느 지역이 어떤 품목군에 집중되어 있는지 구체적으로 언급"""
+- 어느 지역이 어떤 품목군에 집중되어 있는지 구체적으로 언급
+- 본문 마지막에 빈 줄 하나를 두고 반드시: **한 줄 요약:** [두 지역 비교 결론을 한 문장으로]"""
 
 _COMPARE_TEMPLATE = """두 지역의 공공조달 수요 포트폴리오 비교입니다.
 

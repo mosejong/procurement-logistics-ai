@@ -657,7 +657,9 @@ with tab_map:
     if _drilldown_city is not None and not matrix_all.empty:
         _src_d = matrix_all[matrix_all["city"] == _drilldown_city].copy()
         if selected_cat != "전체":
-            _src_d = _src_d[_src_d["item_category"] == selected_cat]
+            from src.config.category_map import DISPLAY_TO_MATRIX
+            _matrix_cats = DISPLAY_TO_MATRIX.get(selected_cat, [selected_cat])
+            _src_d = _src_d[_src_d["item_category"].isin(_matrix_cats)]
 
         _agg_d: dict = {
             "bid_count":         ("bid_count",         "sum"),
@@ -1801,64 +1803,79 @@ with tab_region:
                     }).fillna(_disp["recommendation_flag"])
                     st.dataframe(_disp.rename(columns=_COL_KR), use_container_width=True, hide_index=True)
 
-                # 데이터부족 비율에 따라 contextual 안내
+                # ── 통합 AI 판정 (수요 신호 + 경쟁 신호 → 단일 🟢/🟡/🔴) ──────────
                 _n_low = (result["recommendation_flag"] == "데이터부족").sum()
                 _n_total = len(result)
                 _pct_low = _n_low / _n_total if _n_total > 0 else 0
-                if _n_low >= 3 or _pct_low >= 0.5:
-                    _shortage_items = result[result["recommendation_flag"] == "데이터부족"]["item_category"].tolist()
-                    if _pct_low >= 0.5:
-                        st.info(
-                            f"**{selected} 지역은 공고 건수가 적은 품목이 많습니다 ({_n_low}/{_n_total}개 품목 데이터부족)**\n\n"
-                            "**데이터부족 = 수요가 없다는 뜻이 아닙니다.** 두 가지 가능성이 있습니다.\n\n"
-                            "| 가능성 | 설명 |\n"
-                            "|---|---|\n"
-                            "| 🔵 블루오션 | 수요는 있지만 소액 수의계약·직접구매로 처리되어 공고가 안 뜸 |\n"
-                            "| ⚪ 실제 저수요 | 해당 지역 공공기관 수요 자체가 낮음 |"
-                        )
-                    else:
-                        st.info(
-                            f"**일부 품목 {_n_low}개가 데이터부족(공고 10건 미만)입니다.** "
-                            "수요 없음 vs 블루오션 — AI 수요 공백 해석으로 확인하세요."
-                        )
+                _shortage_items = result[result["recommendation_flag"] == "데이터부족"]["item_category"].tolist()
+                _hot_rec_u = result[result["bid_count"] >= 20] if not result.empty else pd.DataFrame()
+                _hot_items_u: list[dict] = [
+                    {
+                        "item": r.item_category,
+                        "bid_count": int(r.bid_count),
+                        "opportunity_score": float(r.opportunity_score),
+                        "competition_score": float(getattr(r, "competition_score", 1.0)),
+                    }
+                    for r in _hot_rec_u.head(5).itertuples()
+                ] if not _hot_rec_u.empty else []
 
-                    # AI 판정 — 버튼 클릭 시 표시 (토글 대신)
-                    _ai_shortage_key = f"shortage_verdict_{selected}"
-                    if _ai_shortage_key not in st.session_state.get("gemini_cache", {}):
-                        if st.button("🤖 AI 수요 공백 해석", key=f"btn_{_ai_shortage_key}"):
-                            with st.spinner("인근 지역 데이터와 비교 분석 중..."):
-                                from src.recommendation.gemini_client import build_shortage_verdict, ShortageContext
+                if _n_low >= 3 or _pct_low >= 0.5 or _hot_items_u:
+                    from src.recommendation.gemini_client import _unified_baseline
+                    _baseline = _unified_baseline(_shortage_items, _hot_items_u)
+                    _signal_color = {"🟢": COLOR_GOOD, "🟡": COLOR_WARN, "🔴": COLOR_BAD}.get(_baseline, COLOR_WARN)
+                    st.markdown(
+                        f'<div style="background:{_signal_color}18;border-left:4px solid {_signal_color};'
+                        f'padding:8px 14px;border-radius:4px;margin:8px 0;">'
+                        f'<span style="font-size:14px;font-weight:700;color:{_signal_color};">'
+                        f'{_baseline} 종합 판정</span>'
+                        f'<span style="font-size:12px;color:#64748B;margin-left:10px;">'
+                        f'수요 신호({_n_total - _n_low}개 데이터 확보 · {_n_low}개 부족) + 경쟁 신호 통합</span>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    _unified_key = f"unified_verdict_{selected}"
+                    if _unified_key not in st.session_state.get("gemini_cache", {}):
+                        if st.button("🤖 AI 종합 판정 해석", key=f"btn_{_unified_key}"):
+                            with st.spinner("수요·경쟁 신호 종합 분석 중..."):
+                                from src.recommendation.gemini_client import build_unified_verdict, UnifiedVerdictContext
                                 _same_city = features_all[
                                     (features_all["city"] == sel_city) &
                                     (features_all["district"] != selected)
                                 ] if "city" in features_all.columns else features_all
                                 _total_city_dists = _same_city["district"].nunique()
-                                _comparison = []
-                                for _item in _shortage_items[:6]:
+                                _comparison_u = []
+                                for _item in _shortage_items[:4]:
                                     _item_rows = _same_city[_same_city["item_category"] == _item]
-                                    _with_data = (_item_rows["bid_count"] >= MIN_BID_REGION).sum()
                                     _avg = _item_rows["bid_count"].mean() if not _item_rows.empty else 0
-                                    _comparison.append({
-                                        "item": _item, "city": CITY_LABELS.get(sel_city, sel_city),
+                                    _with_data = (_item_rows["bid_count"] >= MIN_BID_REGION).sum()
+                                    _comparison_u.append({
+                                        "item": _item,
                                         "avg_count": float(_avg),
                                         "districts_with_data": int(_with_data),
                                         "total_districts": _total_city_dists,
                                     })
                                 _dprofile = result["district_profile"].iloc[0] if "district_profile" in result.columns and not result.empty else "전국 주요 지역"
-                                _sctx = ShortageContext(
+                                _same_city_all = features_all[
+                                    (features_all["city"] == sel_city) if "city" in features_all.columns else features_all.index.notna()
+                                ]
+                                _city_avg_u = _same_city_all.groupby("district")["bid_count"].sum().mean() if not _same_city_all.empty else 0
+                                _uctx = UnifiedVerdictContext(
                                     city=CITY_LABELS.get(sel_city, sel_city),
                                     district=selected,
                                     district_profile=_dprofile,
                                     shortage_items=_shortage_items,
-                                    total_bids_in_district=int(result["bid_count"].sum()),
-                                    same_city_comparison=_comparison,
+                                    hot_items=_hot_items_u,
+                                    shortage_comparison=_comparison_u,
+                                    city_avg_bid_count=float(_city_avg_u),
+                                    baseline_signal=_baseline,
                                 )
                                 if "gemini_cache" not in st.session_state:
                                     st.session_state["gemini_cache"] = {}
-                                st.session_state["gemini_cache"][_ai_shortage_key] = build_shortage_verdict(_sctx)
+                                st.session_state["gemini_cache"][_unified_key] = build_unified_verdict(_uctx)
                                 st.rerun()
-                    if _ai_shortage_key in st.session_state.get("gemini_cache", {}):
-                        st.markdown(st.session_state["gemini_cache"][_ai_shortage_key])
+                    if _unified_key in st.session_state.get("gemini_cache", {}):
+                        st.markdown(st.session_state["gemini_cache"][_unified_key])
             else:
                 st.dataframe(display, use_container_width=True, hide_index=True)
 
@@ -1932,50 +1949,6 @@ with tab_region:
                         f"공고 {int(row.bid_count)}건"
                     )
 
-        # 과수요 판정 — 상위 추천 품목 중 공고 수가 높은 항목 경쟁 구조 분석
-        _hot_rec = rec_result[rec_result["bid_count"] >= 20] if not rec_result.empty else pd.DataFrame()
-        if not _hot_rec.empty:
-            _overdemand_key = f"overdemand_{selected}"
-            st.markdown("---")
-            _hot_label = ", ".join(_hot_rec["item_category"].head(3).tolist())
-            st.info(
-                f"**수요 집중 품목 감지: {_hot_label}**  \n"
-                "공고 건수가 많은 품목은 수요가 확실하지만 기존 납품사와의 경쟁이 치열할 수 있습니다. "
-                "레드오션인지 아직 진입 여지가 있는지 AI가 해석합니다."
-            )
-            if _overdemand_key not in st.session_state.get("gemini_cache", {}):
-                if st.button("🤖 AI 경쟁 구조 해석", key=f"btn_{_overdemand_key}"):
-                    with st.spinner("경쟁 구조 분석 중..."):
-                        from src.recommendation.gemini_client import build_overdemand_verdict, OverdemandContext
-                        _same_city_all = features_all[
-                            (features_all["city"] == sel_city) if "city" in features_all.columns else features_all.index.notna()
-                        ]
-                        _city_avg = _same_city_all.groupby("district")["bid_count"].sum().mean() if not _same_city_all.empty else 0
-                        _city_max = _same_city_all["bid_count"].max() if not _same_city_all.empty else 0
-                        _hot_items_data = []
-                        for _hrow in _hot_rec.head(5).itertuples():
-                            _hot_items_data.append({
-                                "item": _hrow.item_category,
-                                "bid_count": int(_hrow.bid_count),
-                                "opportunity_score": float(_hrow.opportunity_score),
-                                "competition_score": float(getattr(_hrow, "competition_score", 1.0)),
-                                "avg_lead_time_days": getattr(_hrow, "avg_lead_time_days", "?"),
-                            })
-                        _dprofile = result["district_profile"].iloc[0] if "district_profile" in result.columns and not result.empty else "전국 주요 지역"
-                        _octx = OverdemandContext(
-                            city=CITY_LABELS.get(sel_city, sel_city),
-                            district=selected,
-                            district_profile=_dprofile,
-                            hot_items=_hot_items_data,
-                            city_avg_bid_count=float(_city_avg),
-                            city_max_bid_count=float(_city_max),
-                        )
-                        if "gemini_cache" not in st.session_state:
-                            st.session_state["gemini_cache"] = {}
-                        st.session_state["gemini_cache"][_overdemand_key] = build_overdemand_verdict(_octx)
-                        st.rerun()
-            if _overdemand_key in st.session_state.get("gemini_cache", {}):
-                st.markdown(st.session_state["gemini_cache"][_overdemand_key])
 
         # AI 공공수요 해석 (Gemini)
         st.subheader("🤖 AI 공공수요 해석")
