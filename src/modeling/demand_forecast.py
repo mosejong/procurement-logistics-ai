@@ -44,6 +44,9 @@ def load_monthly(item_category: str | None = None) -> pd.DataFrame:
 def forecast_category(monthly: pd.DataFrame, category: str, months_ahead: int = 6) -> pd.DataFrame:
     """
     단일 카테고리 월별 건수에 선형 추세를 피팅하고 미래 예측합니다.
+
+    계절성이 강한 카테고리(seasonal_cv > 0.8)는 월별 평균 잔차를 예측값에
+    더해 1자 예측을 방지합니다 (선형 트렌드 + 가법 계절 성분).
     """
     cat = monthly[monthly["item_category"] == category].sort_values("ym").copy()
     if len(cat) < 6:
@@ -58,9 +61,23 @@ def forecast_category(monthly: pd.DataFrame, category: str, months_ahead: int = 
     model = LinearRegression()
     model.fit(X, y)
 
-    # 과거 피팅값
+    # 과거 피팅값 및 잔차
     cat["fitted"] = model.predict(X).round(1)
     cat["residual"] = cat["bid_count"] - cat["fitted"]
+
+    # 계절성 감지: CV > 0.5 또는 데이터가 12개월 이상이면 월별 성분 항상 추출
+    cv = float(cat["residual"].std() / (cat["bid_count"].mean() + 1e-9))
+    has_seasonality = cv > 0.5
+
+    # 월별 계절 성분: 같은 달 잔차의 평균 (가법 모형)
+    # 12개월 이상 데이터면 CV 무관하게 적용 — 계절 요인이 작아도 예측에 반영
+    cat["month"] = cat["ym"].apply(lambda p: p.month)
+    apply_seasonal = has_seasonality or len(cat) >= 12
+    seasonal_component: dict[int, float] = (
+        cat.groupby("month")["residual"].mean().to_dict()
+        if apply_seasonal
+        else {}
+    )
 
     # 미래 예측
     last_t = cat["t"].max()
@@ -69,7 +86,9 @@ def forecast_category(monthly: pd.DataFrame, category: str, months_ahead: int = 
     for i in range(1, months_ahead + 1):
         t_fut = last_t + i
         ym_fut = last_ym + i
-        pred = max(0, round(model.predict([[t_fut]])[0], 1))
+        linear_pred = model.predict([[t_fut]])[0]
+        season_adj = seasonal_component.get(ym_fut.month, 0.0)
+        pred = max(0, round(linear_pred + season_adj, 1))
         future_rows.append({
             "ym": ym_fut,
             "ym_str": str(ym_fut),
@@ -90,15 +109,12 @@ def forecast_category(monthly: pd.DataFrame, category: str, months_ahead: int = 
     n_recent = min(6, len(cat))
     recent_cat = cat.tail(n_recent).reset_index(drop=True)
     recent_slope = float(np.polyfit(range(n_recent), recent_cat["bid_count"].values, 1)[0])
-    # 최근 기울기가 전체보다 크면 최근 값 우선 사용
     display_slope = recent_slope if abs(recent_slope) >= abs(slope) else slope
     result["trend"] = "증가" if display_slope > 1.0 else ("감소" if display_slope < -1.0 else "유지")
     result["slope_per_month"] = round(display_slope, 2)
 
-    # 계절성 감지: CV > 0.8 (강한 계절성만 경고 — 0.5는 너무 민감)
-    cv = float(cat["residual"].std() / (cat["bid_count"].mean() + 1e-9))
     result["seasonal_cv"] = round(cv, 3)
-    result["has_seasonality"] = cv > 0.8
+    result["has_seasonality"] = has_seasonality
 
     return result
 
