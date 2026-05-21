@@ -3199,6 +3199,11 @@ with tab_forecast:
         _bo = pd.read_csv(BLUE_OCEAN_PATH)
         _fc = pd.read_csv(FORECAST_PATH)
 
+        # 내부 카테고리명 → 표시명 변환 (급식/식품 → 급식/식자재 등)
+        from src.config.category_map import MATRIX_TO_DISPLAY
+        _fc["item_category"] = _fc["item_category"].map(MATRIX_TO_DISPLAY).fillna(_fc["item_category"])
+        _bo["item_category"] = _bo["item_category"].map(MATRIX_TO_DISPLAY).fillna(_bo["item_category"])
+
         _fc_cats = sorted(_fc["item_category"].dropna().unique().tolist())
         # matrix_all 기준 전체 도시 (blue_ocean 파일에 없는 도시도 선택 가능)
         _fc_cities = sorted(matrix_all["city"].dropna().unique().tolist()) if not matrix_all.empty else sorted(_bo["city"].dropna().unique().tolist())
