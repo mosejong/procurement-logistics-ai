@@ -2835,24 +2835,29 @@ with tab_logistics:
         _all_logi_cities[_logi_city_labels.index(_logi_city_sel) - 1]
         if _logi_city_sel != "전국" and _all_logi_cities else None
     )
-    _features_l = (
-        features_all[features_all["city"] == _logi_city_actual].copy()
-        if _logi_city_actual and "city" in features_all.columns and not features_all.empty
-        else features_all.copy() if not features_all.empty else features_all
-    )
+    # 시/도 선택 여부에 따라 집계 단위 결정: 전국=시도 단위 / 특정 시도=시군구 단위
+    _drill_district = _logi_city_actual is not None
+    if _drill_district:
+        _features_l = features_all[features_all["city"] == _logi_city_actual].copy() if "city" in features_all.columns else features_all.copy()
+        _hub_group_col = "district"
+    else:
+        _features_l = features_all.copy() if not features_all.empty else features_all
+        _hub_group_col = "city"
 
     if _features_l.empty:
         st.warning("분석 데이터가 없습니다.")
     else:
-        # 시/도 × 품목 집계
+        # 집계 단위 × 품목 집계
         _sel_phys_cats = PHYSICAL_CATEGORIES if _logi_cat_sel == "전체 물리적 납품" else {_logi_cat_sel}
         _hub_df = _features_l[_features_l["item_category"].isin(_sel_phys_cats)].copy() if "item_category" in _features_l.columns else pd.DataFrame()
 
         if _hub_df.empty:
             st.warning("물리적 납품 품목 데이터가 없습니다.")
+        elif _hub_group_col not in _hub_df.columns:
+            st.warning(f"'{_hub_group_col}' 컬럼이 없습니다.")
         else:
             _city_agg = (
-                _hub_df.groupby("city")
+                _hub_df.groupby(_hub_group_col)
                 .agg(
                     physical_bids=("bid_count", "sum"),
                     physical_amount=("amount_sum", "sum"),
@@ -2869,55 +2874,92 @@ with tab_logistics:
             _city_agg["hub_score"] = (
                 (_city_agg["_bids_score"] * W_HUB_BIDS + _city_agg["_amt_score"] * W_HUB_AMT + _city_agg["_cat_score"] * W_HUB_CAT) * 100
             ).round(1)
-            _city_agg["zone"] = _city_agg["city"].map(COVERAGE_ZONE).fillna("기타")
-            _city_agg["city_label"] = _city_agg["city"].map(CITY_LABELS).fillna(_city_agg["city"])
+
+            if _drill_district:
+                _city_agg["city_label"] = _city_agg["district"]
+                _city_agg["zone"] = CITY_LABELS.get(_logi_city_actual, _logi_city_actual)
+            else:
+                _city_agg["zone"] = _city_agg["city"].map(COVERAGE_ZONE).fillna("기타")
+                _city_agg["city_label"] = _city_agg["city"].map(CITY_LABELS).fillna(_city_agg["city"])
             _city_agg = _city_agg.sort_values("hub_score", ascending=False).reset_index(drop=True)
 
             # ── 섹션 1: 허브 점수 순위 ──────────────────────────
-            st.subheader("시/도별 물류 허브 점수 순위")
-            st.caption("물리적 납품 품목(IT·식자재·교구·사무용품·의료용품·인쇄물·차량)의 공고 수·금액·품목 다양성 종합 점수")
+            if _drill_district:
+                st.subheader(f"{CITY_LABELS.get(_logi_city_actual, _logi_city_actual)} 시군구별 물류 허브 점수 순위")
+                st.caption("시군구 단위 공고 수·금액·품목 다양성 종합 점수 — 납품 거점 후보 도출")
+                _rank_col_label = "시/군/구"
+            else:
+                st.subheader("시/도별 물류 허브 점수 순위")
+                st.caption("물리적 납품 품목(IT·식자재·교구·사무용품·의료용품·인쇄물·차량)의 공고 수·금액·품목 다양성 종합 점수")
+                _rank_col_label = "시/도"
 
             _display_agg = _city_agg[["city_label", "zone", "physical_bids", "physical_amount", "category_count", "hub_score"]].copy()
             _display_agg["physical_amount"] = _display_agg["physical_amount"].apply(format_won)
             _display_agg.insert(0, "순위", range(1, len(_display_agg) + 1))
             st.dataframe(
                 _display_agg.rename(columns={
-                    "city_label": "시/도", "zone": "권역", "physical_bids": "물리적 공고 수",
+                    "city_label": _rank_col_label,
+                    "zone": "시/도" if _drill_district else "권역",
+                    "physical_bids": "물리적 공고 수",
                     "physical_amount": "총 발주 금액", "category_count": "품목 다양성",
                     "hub_score": "허브 점수",
                 }),
                 use_container_width=True, hide_index=True,
             )
 
-            # ── 섹션 2: 권역별 TOP 거점 ─────────────────────────
-            st.subheader("권역별 대표 거점")
-            _zone_top = (
-                _city_agg.sort_values("hub_score", ascending=False)
-                .groupby("zone")
-                .first()
-                .reset_index()[["zone", "city_label", "physical_bids", "hub_score"]]
-                .sort_values("hub_score", ascending=False)
-            )
-            _zone_cols = st.columns(min(len(_zone_top), 4))
-            for i, (col, row) in enumerate(zip(_zone_cols, _zone_top.itertuples())):
-                with col:
-                    tier = "🥇 1티어" if i == 0 else ("🥈 2티어" if i == 1 else ("🥉 3티어" if i == 2 else f"{i+1}위"))
-                    st.metric(
-                        label=f"{tier} · {row.zone}",
-                        value=row.city_label,
-                        delta=f"공고 {int(row.physical_bids):,}건",
-                    )
+            # ── 섹션 2: 권역별/구간별 TOP 거점 ──────────────────
+            if _drill_district:
+                # 시군구 드릴다운: TOP 3 거점 카드
+                st.subheader(f"납품 거점 후보 TOP 3")
+                _top3_dist = _city_agg.head(3)
+                _top3_cols = st.columns(min(len(_top3_dist), 3))
+                for i, (col, row) in enumerate(zip(_top3_cols, _top3_dist.itertuples())):
+                    with col:
+                        tier = "🥇 1순위" if i == 0 else ("🥈 2순위" if i == 1 else "🥉 3순위")
+                        st.metric(
+                            label=f"{tier}",
+                            value=row.city_label,
+                            delta=f"공고 {int(row.physical_bids):,}건",
+                        )
+            else:
+                st.subheader("권역별 대표 거점")
+                _zone_top = (
+                    _city_agg.sort_values("hub_score", ascending=False)
+                    .groupby("zone")
+                    .first()
+                    .reset_index()[["zone", "city_label", "physical_bids", "hub_score"]]
+                    .sort_values("hub_score", ascending=False)
+                )
+                _zone_cols = st.columns(min(len(_zone_top), 4))
+                for i, (col, row) in enumerate(zip(_zone_cols, _zone_top.itertuples())):
+                    with col:
+                        tier = "🥇 1티어" if i == 0 else ("🥈 2티어" if i == 1 else ("🥉 3티어" if i == 2 else f"{i+1}위"))
+                        st.metric(
+                            label=f"{tier} · {row.zone}",
+                            value=row.city_label,
+                            delta=f"공고 {int(row.physical_bids):,}건",
+                        )
 
             # ── 섹션 3: 품목별 수요 집중 지역 ────────────────────
-            st.subheader("품목별 수요 집중 지역")
-            st.caption("각 물리적 납품 품목이 가장 많이 발주되는 시/도 TOP 3")
+            if _drill_district:
+                st.subheader("품목별 수요 집중 시군구")
+                st.caption(f"{CITY_LABELS.get(_logi_city_actual, _logi_city_actual)} 내 각 품목이 가장 많이 발주되는 시군구 TOP 3")
+                _cat_group_col = "district"
+            else:
+                st.subheader("품목별 수요 집중 지역")
+                st.caption("각 물리적 납품 품목이 가장 많이 발주되는 시/도 TOP 3")
+                _cat_group_col = "city"
+
             _cat_city = (
-                _hub_df.groupby(["item_category", "city"])["bid_count"]
+                _hub_df.groupby(["item_category", _cat_group_col])["bid_count"]
                 .sum()
                 .reset_index()
                 .sort_values(["item_category", "bid_count"], ascending=[True, False])
             )
-            _cat_city["city_label"] = _cat_city["city"].map(CITY_LABELS).fillna(_cat_city["city"])
+            if not _drill_district:
+                _cat_city["city_label"] = _cat_city["city"].map(CITY_LABELS).fillna(_cat_city["city"])
+            else:
+                _cat_city["city_label"] = _cat_city["district"]
             _cat_top3 = (
                 _cat_city.sort_values("bid_count", ascending=False)
                 .groupby("item_category", group_keys=False)
@@ -2945,14 +2987,14 @@ with tab_logistics:
 
                         # 후보별 주요 품목
                         _top_cats_by_city = (
-                            _hub_df.groupby(["city", "item_category"])["bid_count"]
+                            _hub_df.groupby([_hub_group_col, "item_category"])["bid_count"]
                             .sum()
                             .reset_index()
-                            .sort_values(["city", "bid_count"], ascending=[True, False])
+                            .sort_values([_hub_group_col, "bid_count"], ascending=[True, False])
                         )
                         _candidates = []
                         for _, row in _city_agg.iterrows():
-                            _top_cats = _top_cats_by_city[_top_cats_by_city["city"] == row["city"]]["item_category"].head(3).tolist()
+                            _top_cats = _top_cats_by_city[_top_cats_by_city[_hub_group_col] == row[_hub_group_col]]["item_category"].head(3).tolist()
                             _candidates.append({
                                 "city": row["city_label"],
                                 "zone": row["zone"],
