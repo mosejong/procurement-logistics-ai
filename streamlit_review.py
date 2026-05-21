@@ -1973,11 +1973,11 @@ with tab_region:
 
         rec_result = result[result.get("recommendation_flag", pd.Series("추천", index=result.index)) == "추천"] if "recommendation_flag" in result.columns else result
 
-        # 품목군 필터가 선택된 경우 해당 품목을 AI 섹션에 포함 (필터 무관 top3에서 빠지는 문제 방지)
+        # 품목군 필터가 선택된 경우 해당 품목을 AI 섹션에 포함
+        # recommendation_flag 무관하게 표시 — 사용자가 명시적으로 선택한 품목은 데이터부족이어도 AI 해석 제공
         if sel_cat_r != "전체":
             _filtered_row = result[result["item_category"] == sel_cat_r]
-            _filtered_rec = _filtered_row[_filtered_row.get("recommendation_flag", pd.Series("추천", index=_filtered_row.index)) == "추천"] if "recommendation_flag" in _filtered_row.columns else _filtered_row
-            top3 = _filtered_rec.head(1) if not _filtered_rec.empty else rec_result.head(3)
+            top3 = _filtered_row.head(1) if not _filtered_row.empty else rec_result.head(3)
         else:
             top3 = rec_result.head(3)
 
