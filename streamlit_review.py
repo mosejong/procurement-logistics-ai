@@ -1972,7 +1972,14 @@ with tab_region:
                 show_score_formula()
 
         rec_result = result[result.get("recommendation_flag", pd.Series("추천", index=result.index)) == "추천"] if "recommendation_flag" in result.columns else result
-        top3 = rec_result.head(3)
+
+        # 품목군 필터가 선택된 경우 해당 품목을 AI 섹션에 포함 (필터 무관 top3에서 빠지는 문제 방지)
+        if sel_cat_r != "전체":
+            _filtered_row = result[result["item_category"] == sel_cat_r]
+            _filtered_rec = _filtered_row[_filtered_row.get("recommendation_flag", pd.Series("추천", index=_filtered_row.index)) == "추천"] if "recommendation_flag" in _filtered_row.columns else _filtered_row
+            top3 = _filtered_rec.head(1) if not _filtered_rec.empty else rec_result.head(3)
+        else:
+            top3 = rec_result.head(3)
 
         # TOP 3 / 하위 3 해석 블록
         _all_rec = rec_result.copy()
