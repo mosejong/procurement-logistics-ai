@@ -2265,6 +2265,37 @@ with tab_compare:
 
         compare_df = pd.DataFrame(rows).sort_values(f"{dist_a} 점수", ascending=False)
 
+        # ── aT 급식 실수요 배너 (급식/식자재 카테고리가 있을 때만) ──────────
+        _food_cats = {"급식/식자재", "급식/식품"}
+        _has_food_a = bool(_food_cats & set(data_a.index)) if not data_a.empty else False
+        _has_food_b = bool(_food_cats & set(data_b.index)) if not data_b.empty else False
+        if _has_food_a or _has_food_b:
+            _at_bid_path = TABLES_DIR / "school_meal_bid_summary.csv"
+            if _at_bid_path.exists():
+                _at_bid = pd.read_csv(_at_bid_path, encoding="utf-8-sig")
+                def _at_count(city):
+                    row = _at_bid[_at_bid["city"] == city]
+                    return int(row["bid_count"].iloc[0]) if not row.empty else 0
+
+                _at_a = _at_count(city_a) if city_a else 0
+                _at_b = _at_count(city_b) if city_b else 0
+                _nara_a = int(data_a.loc[data_a.index.intersection(_food_cats), "bid_count"].sum()) if not data_a.empty else 0
+                _nara_b = int(data_b.loc[data_b.index.intersection(_food_cats), "bid_count"].sum()) if not data_b.empty else 0
+
+                st.info(
+                    f"**급식·식자재 실수요 보완 데이터 (aT 학교급식)**  \n"
+                    f"나라장터만으로는 급식 공공수요의 일부만 포착됩니다. "
+                    f"aT 학교급식 입찰 데이터로 실제 수요 규모를 확인하세요.  \n"
+                    f"| | 나라장터 공고 | aT 급식 입찰 | 배율 |\n"
+                    f"|---|---|---|---|\n"
+                    f"| {dist_a} ({CITY_LABELS.get(city_a, city_a)}) | {_nara_a:,}건 | {_at_a:,}건 | "
+                    + (f"**{_at_a//_nara_a:,}배**" if _nara_a > 0 else "∞") +
+                    f" |\n"
+                    f"| {dist_b} ({CITY_LABELS.get(city_b, city_b)}) | {_nara_b:,}건 | {_at_b:,}건 | "
+                    + (f"**{_at_b//_nara_b:,}배**" if _nara_b > 0 else "∞") +
+                    " |"
+                )
+
         # 품목군별 공고 비율 파이차트 (위)
         st.subheader("품목군별 공고 비율")
         _pie_col_a, _pie_col_b = st.columns(2)
@@ -2838,7 +2869,11 @@ with tab_logistics:
     # 시/도 선택 여부에 따라 집계 단위 결정: 전국=시도 단위 / 특정 시도=시군구 단위
     _drill_district = _logi_city_actual is not None
     if _drill_district:
-        _features_l = features_all[features_all["city"] == _logi_city_actual].copy() if "city" in features_all.columns else features_all.copy()
+        # district == city인 행은 시도 집계 행 — 시군구 드릴다운에서 제외
+        _features_l = features_all[
+            (features_all["city"] == _logi_city_actual) &
+            (features_all["district"] != _logi_city_actual)
+        ].copy() if "city" in features_all.columns else features_all.copy()
         _hub_group_col = "district"
     else:
         _features_l = features_all.copy() if not features_all.empty else features_all
