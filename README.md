@@ -30,8 +30,8 @@
 | 입찰공고 데이터 | 조달청 나라장터 | `apis.data.go.kr/1230000/ad/BidPublicInfoService` | 지역·품목별 공공수요 파악 (100,083건) |
 | 계약정보 데이터 | 조달청 나라장터 | `apis.data.go.kr/1230000/ao/CntrctInfoService` | 의사→실측 확정 신호 (38,367건) |
 | 발주계획 | 조달청 나라장터 | `apis.data.go.kr/1230000/ao/OrderPlanSttusService` | 향후 6개월 예정 발주 (445건, AI 해석 컨텍스트) |
-| 종합쇼핑몰 MAS 품목 | 조달청 나라장터 | `apis.data.go.kr/1230000/at/ShoppingMallPrdctInfoService` | 다수공급자계약 단가 시장 규모 (5,000건, AI 해석 컨텍스트) |
-| 학교급식 입찰·낙찰 | 한국농수산식품유통공사(aT) | `school.at.or.kr/api` | 급식 품목 수요 실측 (734,242건) |
+| 종합쇼핑몰 MAS 품목 | 조달청 나라장터 | `apis.data.go.kr/1230000/at/ShoppingMallPrdctInfoService` | 다수공급자계약 단가 시장 규모 (22,740건, AI 해석 컨텍스트) |
+| 학교급식 입찰·낙찰 | 한국농수산식품유통공사(aT) | `school.at.or.kr/api` | 입찰·낙찰 기반 급식 수요 보강 (734,242건) |
 | 연령별 인구 통계 | 행정안전부 | `apis.data.go.kr/1741000/admmSexdAgePpltn/selectAdmmSexdAgePpltn` | 소비층 적합도 분석 |
 | 상권정보 | 소상공인시장진흥공단 | `apis.data.go.kr/B553077/api/open/sdsc2` | 업종별 경쟁 포화도 분석 |
 | 물류창고 등록정보 | 국토교통부 | 공공데이터포털 | 물류 거점 인프라 분석 (5,911개소) |
@@ -65,7 +65,7 @@ KOSIS 신생기업 생존율 API
       adjusted_score = opportunity_score × (survival_5y/100) × (1 - dissolution_rate)
 
 조달청 발주계획 API + 종합쇼핑몰 MAS API
-  → collect_plan_data.py (445건 발주계획 + 5,000건 MAS 품목)
+  → collect_plan_data.py (445건 발주계획 + 22,740건 MAS 품목)
   → procurement_plan_summary.csv / shopping_mall_summary.csv
 
 Gemini API (gemini_client.py) — AI 해석 5종 (정량 지표를 사람이 이해하기 쉬운 설명으로 변환)
@@ -125,7 +125,7 @@ python -m src.collect.build_national_sample --cities 서울특별시 경기도
 | `bids_per_10k_population` | 공고수 ÷ (인구 / 10,000) | 인구 규모 편향 보정 수요 밀도 |
 | `consumer_fit_score` | 주소비층 연령 비중 min-max 정규화 | 인구 구성 기반 소비층 적합도 |
 | `stores_per_10k` | 점포수 ÷ (인구 / 10,000) | 업종별 경쟁 포화도 |
-| `hub_score` | 물리적 공고수(50%) + 금액(30%) + 품목다양성(20%) | 물류 거점 후보 종합 점수 |
+| `hub_score` | 공고수(40%) + 금액(25%) + 품목다양성(15%) + 물류창고 인프라(20%) | 물류 거점 후보 종합 점수 |
 
 ---
 
