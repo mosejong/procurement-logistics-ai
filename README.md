@@ -7,6 +7,15 @@
 
 나라장터 입찰공고를 지역별 공공수요 신호로 해석해, 예비창업자·납품업체·물류사가 수요 패턴을 데이터 근거로 탐색합니다.
 
+## 본인 담당과 결과
+
+2026.05–07에 진행한 개인 프로젝트입니다. 문제 정의와 데이터 흐름을 정리하고,
+AI 개발 도구를 활용해 수집·정제·분류·지표 계산·Gemini 설명·Streamlit 화면을 연결했습니다.
+**2026 공공조달데이터·AI 활용 창업경진대회 대면심사에 진출**했습니다.
+
+처음 보는 분은 [수집 단계](src/collect/), [분류기 학습](src/modeling/train_classifier.py),
+[설명 생성](src/recommendation/), [대시보드](streamlit_review.py) 순으로 코드를 볼 수 있습니다.
+
 ## 👉 [라이브 데모](https://procurement-logistics-ai-5qian47widxpcuqefpjipy.streamlit.app)
 
 ## 🧭 라이브 데모 보는 방법
@@ -83,6 +92,13 @@ Streamlit 대시보드 (streamlit_review.py) — 10개 탭
 ```
 
 ---
+
+### 분류 정확도의 평가 조건
+
+위 98.6%는 **키워드 규칙으로 만든 라벨**을 기준으로, 라벨이 있는 데이터의 15%를
+층화 홀드아웃으로 나눠 측정한 내부 검증 결과입니다. 사람이 검수한 별도 정답으로
+측정한 실사용 품목 분류 성능과 구분합니다.
+학습·분할 방식은 [train_classifier.py](src/modeling/train_classifier.py)에 있습니다.
 
 ## 공모전 요건 매핑
 
